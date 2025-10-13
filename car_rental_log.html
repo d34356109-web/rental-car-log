@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>租車交車紀錄系統</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 使用 Inter 字體 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* 自定義滾動條樣式，讓表格更好看 */
+        /* 在行動裝置上，我們主要使用卡片佈局，避免水平滾動 */
+        .log-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .log-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .log-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        /* 交車和收車的顏色標記 */
+        .delivery-color { background-color: #e0f2f1; color: #0f766e; } /* 淺青綠 */
+        .collection-color { background-color: #fef3c7; color: #a16207; } /* 淺金黃 */
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- 主容器 -->
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 p-4 bg-white shadow-lg rounded-xl">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">租車交車紀錄控管中心</h1>
+            <p class="text-gray-500">使用 Firestore 儲存紀錄，資料即時同步。當前使用者 ID: <span id="user-id-display" class="font-mono text-xs bg-gray-100 p-1 rounded">載入中...</span></p>
+        </header>
+
+        <!-- 訊息/載入指示器 -->
+        <div id="message-box" class="mb-6 p-3 rounded-lg text-sm transition-all duration-300 hidden"></div>
+
+        <!-- 新增紀錄表單 (行動裝置上為單欄，平板以上為三欄) -->
+        <div class="bg-white p-6 shadow-xl rounded-xl mb-10">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">新增交車/收車紀錄</h2>
+            <form id="record-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <!-- 日期與時間 -->
+                <div>
+                    <label for="record-date" class="block text-sm font-medium text-gray-700">日期</label>
+                    <input type="date" id="record-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="record-time" class="block text-sm font-medium text-gray-700">時間</label>
+                    <input type="time" id="record-time" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+
+                <!-- 動作 (交車/收車) -->
+                <div>
+                    <label for="record-action" class="block text-sm font-medium text-gray-700">動作</label>
+                    <select id="record-action" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="交車">交車 (Delivery)</option>
+                        <option value="收車">收車 (Collection)</option>
+                    </select>
+                </div>
+
+                <!-- 地點與車牌 -->
+                <div class="md:col-span-2">
+                    <label for="record-location" class="block text-sm font-medium text-gray-700">地點</label>
+                    <input type="text" id="record-location" placeholder="例如: 成田機場(BR198) T1" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌</label>
+                    <input type="text" id="record-plate" placeholder="例如: 3333" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                
+                <!-- 需求/備註 -->
+                <div class="md:col-span-3">
+                    <label for="record-notes" class="block text-sm font-medium text-gray-700">需求 / 備註 (包含兒童座椅、車型等)</label>
+                    <textarea id="record-notes" rows="2" placeholder="例如: 兩張兒童座椅(2歲跟5歲)；車型: Toyota 40系" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <!-- 提交按鈕 -->
+                <div class="md:col-span-3 flex justify-end">
+                    <button type="submit" id="submit-button" class="mt-4 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400">
+                        儲存紀錄
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 紀錄列表與查詢 -->
+        <div class="bg-white p-6 shadow-xl rounded-xl">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">所有紀錄</h2>
+            
+            <!-- 查詢/排序控制項 -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                <input type="text" id="search-input" placeholder="查詢：輸入地點、車牌、備註關鍵字" class="flex-grow p-2 border rounded-lg focus:border-indigo-500">
+                <button id="sort-button" class="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-150 flex-shrink-0">
+                    <span id="sort-icon">📅</span> 排序: 由新到舊
+                </button>
+            </div>
+
+            <!-- 紀錄表格容器 -->
+            <div class="log-container overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <!-- 在小螢幕上隱藏表格標頭，改用卡片佈局 -->
+                    <thead class="bg-gray-50 sticky top-0 hidden sm:table-header-group">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期/時間</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">動作</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">需求 / 備註</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- 紀錄將會動態載入此處 -->
+                    </tbody>
+                </table>
+                <p id="no-records-message" class="text-center py-10 text-gray-500 hidden">目前沒有任何紀錄。</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 設定 Firebase Debug Log
+        setLogLevel('Debug');
+
+        // =================================================================
+        // *** 您的 Firebase 專案配置已成功載入！ ***
+        // =================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAqksNR1a1Tf4OgL8X2ezT8u5rlFygNHPc",
+            authDomain: "rentalcarlog-app.firebaseapp.com",
+            projectId: "rentalcarlog-app",
+            storageBucket: "rentalcarlog-app.firebasestorage.app",
+            messagingSenderId: "68461236293",
+            appId: "1:68461236293:web:2ab0179cc52585ab74932c",
+            measurementId: "G-C7LWGH36JY"
+        };
+        const YOUR_PROJECT_ID = "rentalcarlog-app"; 
+        // =================================================================
+
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+        let allRecords = []; // 儲存從 Firestore 獲取的所有紀錄
+        let sortDirection = 'desc'; // 'desc' (新到舊) 或 'asc' (舊到新)
+
+        const messageBox = document.getElementById('message-box');
+        const recordsTableBody = document.getElementById('records-table-body');
+        const noRecordsMessage = document.getElementById('no-records-message');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const sortButton = document.getElementById('sort-button');
+        const sortIcon = document.getElementById('sort-icon');
+
+        /** 顯示應用程式訊息 */
+        function displayMessage(text, type = 'info') {
+            messageBox.textContent = text;
+            messageBox.className = 'mb-6 p-3 rounded-lg text-sm transition-all duration-300';
+            messageBox.classList.remove('hidden');
+
+            switch (type) {
+                case 'success':
+                    messageBox.classList.add('bg-green-100', 'text-green-800');
+                    break;
+                case 'error':
+                    messageBox.classList.add('bg-red-100', 'text-red-800');
+                    break;
+                case 'info':
+                default:
+                    messageBox.classList.add('bg-blue-100', 'text-blue-800');
+                    break;
+            }
+
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        // --- Firebase 初始化和認證 ---
+        function initFirebase() {
+            const submitButton = document.getElementById('submit-button'); // 取得按鈕元素
+            
+            try {
+                // 這裡不再需要檢查 placeholder，因為設定已經寫死
+                
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // 認證狀態變更監聽
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = userId;
+                        isAuthReady = true;
+                        submitButton.disabled = false; // 認證成功，啟用按鈕
+                        console.log("Firebase 認證完成，User ID:", userId);
+                        fetchRecords(); // 認證完成後開始監聽紀錄
+                    } else {
+                        // 運行在本地環境，我們使用標準的匿名登入
+                        try {
+                             await signInAnonymously(auth);
+                        } catch (error) {
+                            console.error("認證失敗:", error);
+                            displayMessage("認證失敗，請檢查網路或 Firebase 專案設定。", 'error');
+                            submitButton.disabled = true; // 認證失敗，禁用按鈕
+                            userIdDisplay.textContent = '認證失敗 (連線異常)'; 
+                            isAuthReady = true; 
+                        }
+                    }
+                });
+
+            } catch (e) {
+                console.error("Firebase 初始化失敗:", e);
+                displayMessage(`Firebase 初始化失敗。錯誤訊息: ${e.message}。無法儲存紀錄。`, 'error'); 
+                submitButton.disabled = true; // 禁用按鈕
+                userIdDisplay.textContent = '初始化錯誤'; 
+                isAuthReady = true;
+            }
+        }
+
+        /** 獲取 Firestore Collection Path */
+        function getCollectionPath() {
+            // 當在本地運行時，我們使用一個固定的 App ID 來儲存您的私人資料。
+            const localAppId = 'local-rental-app-private'; 
+            // 路徑格式: /artifacts/local-rental-app-private/users/{userId}/rental_records
+            return `artifacts/${localAppId}/users/${userId}/rental_records`;
+        }
+
+
+        // --- 資料操作 (CRUD) ---
+
+        /** 新增紀錄到 Firestore */
+        async function addRecord(event) {
+            event.preventDefault();
+            // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
+            if (!db || !userId) {
+                // 訊息優化: 點出連線/認證問題
+                displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
+                return;
+            }
+
+            document.getElementById('submit-button').disabled = true;
+
+            const date = document.getElementById('record-date').value;
+            const time = document.getElementById('record-time').value;
+            const action = document.getElementById('record-action').value;
+            const location = document.getElementById('record-location').value;
+            const plate = document.getElementById('record-plate').value;
+            const notes = document.getElementById('record-notes').value || '';
+
+            // 將日期和時間合併為一個完整的 ISO 字串，並轉換為 Firestore Timestamp
+            const dateTimeString = `${date}T${time}:00`;
+            const recordTime = new Date(dateTimeString);
+            
+            if (isNaN(recordTime)) {
+                displayMessage("日期或時間格式無效。", 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+
+            const newRecord = {
+                date: date, // 儲存原始日期字串
+                time: time, // 儲存原始時間字串
+                action: action,
+                location: location,
+                plate: plate,
+                notes: notes,
+                timestamp: Timestamp.fromDate(recordTime) // 儲存時間戳記用於排序
+            };
+
+            try {
+                const collectionRef = collection(db, getCollectionPath());
+                await addDoc(collectionRef, newRecord);
+                displayMessage("紀錄儲存成功！", 'success');
+                document.getElementById('record-form').reset();
+            } catch (e) {
+                console.error("新增文件時發生錯誤:", e);
+                displayMessage(`儲存失敗: ${e.message}`, 'error');
+            } finally {
+                document.getElementById('submit-button').disabled = false;
+            }
+        }
+
+        /** 刪除紀錄 */
+        async function deleteLogRecord(id) {
+            // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
+            if (!db || !userId) {
+                // 訊息優化: 點出連線/認證問題，並使用 'error' 類型
+                displayMessage("應用程式初始化失敗或認證未完成，無法執行刪除操作。", 'error');
+                return;
+            }
+            
+            // 使用自定義模態框取代 alert/confirm
+            const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的紀錄嗎？`);
+            if (!confirmation) return;
+
+            try {
+                const docRef = doc(db, getCollectionPath(), id);
+                await deleteDoc(docRef);
+                displayMessage("紀錄已刪除。", 'success');
+            } catch (e) {
+                console.error("刪除文件時發生錯誤:", e);
+                displayMessage(`刪除失敗: ${e.message}`, 'error');
+            }
+        }
+        
+        // --- 資料顯示與監聽 ---
+
+        /** 渲染紀錄列表 */
+        function renderRecords(records) {
+            recordsTableBody.innerHTML = '';
+            
+            if (records.length === 0) {
+                noRecordsMessage.classList.remove('hidden');
+                return;
+            }
+
+            noRecordsMessage.classList.add('hidden');
+
+            // 根據 sortDirection 排序
+            const sortedRecords = [...records].sort((a, b) => {
+                const timeA = a.timestamp.toDate().getTime();
+                const timeB = b.timestamp.toDate().getTime();
+                
+                if (sortDirection === 'desc') {
+                    return timeB - timeA; // 新到舊
+                } else {
+                    return timeA - timeB; // 舊到新
+                }
+            });
+
+            // 執行查詢過濾
+            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+            const filteredRecords = sortedRecords.filter(record => {
+                if (!searchTerm) return true;
+                return (
+                    record.location.toLowerCase().includes(searchTerm) ||
+                    record.plate.toLowerCase().includes(searchTerm) ||
+                    record.notes.toLowerCase().includes(searchTerm) ||
+                    record.action.toLowerCase().includes(searchTerm)
+                );
+            });
+
+
+            filteredRecords.forEach(record => {
+                const actionClass = record.action === '交車' ? 'delivery-color' : 'collection-color';
+                
+                // 針對手機畫面 (sm: 以下) 調整佈局為卡片式
+                const row = document.createElement('tr');
+                // 在手機上是 block/card，平板以上是 table-row
+                row.className = "mb-4 sm:mb-0 block sm:table-row border border-gray-200 sm:border-0 rounded-lg shadow-md sm:shadow-none p-3 sm:p-0 transition duration-200 hover:shadow-lg sm:hover:shadow-none";
+                
+                // 在手機上每個 TD 都變成 block，並加上標籤 (sm:hidden)
+                row.innerHTML = `
+                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm text-gray-900 block sm:table-cell border-b sm:border-0">
+                        <span class="sm:hidden font-medium text-gray-500 mr-2">日期/時間:</span>
+                        <span class="font-bold">${record.date}</span><br>
+                        <span class="text-xs text-gray-500">${record.time}</span>
+                    </td>
+                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-semibold block sm:table-cell border-b sm:border-0">
+                        <span class="sm:hidden font-medium text-gray-500 mr-2">動作:</span>
+                        <span class="px-2 py-1 rounded-full text-xs ${actionClass}">${record.action}</span>
+                    </td>
+                    <td class="px-3 py-1 sm:py-3 text-sm text-gray-700 max-w-xs block sm:table-cell border-b sm:border-0">
+                        <span class="sm:hidden font-medium text-gray-500 mr-2">地點:</span>
+                        ${record.location}
+                    </td>
+                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-mono text-gray-900 block sm:table-cell border-b sm:border-0">
+                        <span class="sm:hidden font-medium text-gray-500 mr-2">車牌:</span>
+                        ${record.plate}
+                    </td>
+                    <td class="px-3 py-1 sm:py-3 text-sm text-gray-500 max-w-md block sm:table-cell border-b sm:border-0">
+                        <span class="sm:hidden font-medium text-gray-500 mr-2">備註:</span>
+                        ${record.notes}
+                    </td>
+                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-medium block sm:table-cell text-right sm:text-left">
+                        <button onclick="window.deleteLogRecord('${record.id}')" class="text-red-600 hover:text-red-900 transition duration-150">刪除</button>
+                    </td>
+                `;
+                recordsTableBody.appendChild(row);
+            });
+
+            if (filteredRecords.length === 0 && searchTerm) {
+                noRecordsMessage.textContent = '找不到符合查詢條件的紀錄。';
+                noRecordsMessage.classList.remove('hidden');
+            } else if (filteredRecords.length === 0) {
+                noRecordsMessage.textContent = '目前沒有任何紀錄。';
+                noRecordsMessage.classList.remove('hidden');
+            }
+        }
+
+        /** 從 Firestore 監聽紀錄的實時更新 */
+        function fetchRecords() {
+            if (!db || !userId) return;
+
+            const collectionRef = collection(db, getCollectionPath());
+            
+            // 使用 onSnapshot 實時監聽
+            onSnapshot(collectionRef, (snapshot) => {
+                const records = [];
+                snapshot.forEach((doc) => {
+                    records.push({ id: doc.id, ...doc.data() });
+                });
+                allRecords = records; // 更新全局紀錄列表
+                renderRecords(allRecords);
+                console.log("資料已更新:", records.length, "筆紀錄");
+            }, (error) => {
+                console.error("監聽紀錄時發生錯誤:", error);
+                displayMessage("載入紀錄失敗，請檢查權限。", 'error');
+            });
+        }
+        
+        // --- 事件監聽器 ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initFirebase();
+            document.getElementById('record-form').addEventListener('submit', addRecord);
+            
+            // 將 JS 函數暴露給 HTML，以便在行內事件中使用 (如刪除按鈕)
+            window.deleteLogRecord = deleteLogRecord; 
+            
+            // 查詢輸入監聽，實時過濾
+            document.getElementById('search-input').addEventListener('input', () => renderRecords(allRecords));
+
+            // 排序按鈕切換
+            sortButton.addEventListener('click', () => {
+                sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
+                sortIcon.textContent = sortDirection === 'desc' ? '📅' : '📆';
+                sortButton.innerHTML = `<span id="sort-icon">${sortIcon.textContent}</span> 排序: 由${sortDirection === 'desc' ? '新到舊' : '舊到新'}`;
+                renderRecords(allRecords); // 重新渲染以應用新的排序
+            });
+
+            // 初始化日期輸入框為今天
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('record-date').value = today;
+        });
+
+    </script>
+</body>
+</html>
