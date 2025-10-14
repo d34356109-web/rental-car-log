@@ -27,12 +27,6 @@
         /* 交車和收車的顏色標記 */
         .delivery-color { background-color: #e0f2f1; color: #0f766e; } /* 淺青綠 */
         .collection-color { background-color: #fef3c7; color: #a16207; } /* 淺金黃 */
-        
-        /* 確保表格在手機上可以橫向滾動 */
-        .log-table {
-            min-width: 800px; /* 確保表格足夠寬，以容納所有欄位 */
-        }
-
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -121,20 +115,17 @@
                 </button>
             </div>
 
-            <!-- 紀錄表格容器 (添加水平滾動) -->
+            <!-- 紀錄表格容器 (移除水平滾動，恢復響應式表格) -->
             <div class="log-container overflow-x-auto rounded-lg border border-gray-200">
-                <table class="log-table min-w-full divide-y divide-gray-200">
-                    <!-- 表格標頭：包含所有欄位 -->
+                <table class="min-w-full divide-y divide-gray-200">
+                    <!-- 表格標頭：簡潔顯示 (5 欄位) -->
                     <thead class="bg-gray-50 sticky top-0">
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">時間</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">動作</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌 (ETC 卡號)</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">里程數 (Km)</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">備註</th>
-                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">詳細/操作</th>
                         </tr>
                     </thead>
                     <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
@@ -274,12 +265,13 @@
             }
         }
 
-        /** 獲取 Firestore Collection Path */
+        /** 獲取 Firestore Collection Path (共享路徑) */
         function getCollectionPath() {
-            // 當在本地運行時，我們使用一個固定的 App ID 來儲存您的私人資料。
-            const localAppId = 'local-rental-app-private'; 
-            // 路徑格式: /artifacts/local-rental-app-private/users/{userId}/rental_records
-            return `artifacts/${localAppId}/users/${userId}/rental_records`;
+            // 協作路徑: 所有登入的使用者 (A & B) 都將存取此路徑
+            const sharedAppId = 'd34356109-rental-log-app'; // 固定的應用程式識別碼
+            const sharedCollectionName = 'rental_records_shared';
+            
+            return `artifacts/${sharedAppId}/public/data/${sharedCollectionName}`;
         }
 
 
@@ -290,7 +282,6 @@
             event.preventDefault();
             // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
             if (!db || !userId) {
-                // 訊息優化: 點出連線/認證問題
                 displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
                 return;
             }
@@ -300,31 +291,26 @@
             const date = document.getElementById('record-date').value;
             const time = document.getElementById('record-time').value;
             const action = document.getElementById('record-action').value;
-            const location = locationSelect.value; // 從 select 取得地點
-            const plate = plateSelect.value; // 從 select 取得車牌 (完整的描述)
+            const location = locationSelect.value;
+            const plate = plateSelect.value; 
             
-            // 透過選定的車牌，自動從對應表中獲取 ETC 卡號
             const etcId = CAR_ETC_MAPPING[plate]; 
             
             const mileage = document.getElementById('record-mileage').value;
             const notes = document.getElementById('record-notes').value || '';
 
-            // 檢查車牌和 ETC 是否已被選中/填充
             if (!plate || !etcId) {
                 displayMessage("請選擇車牌 (ETC 卡號會自動從選單中帶入)。", 'error');
                 document.getElementById('submit-button').disabled = false;
                 return;
             }
 
-            // 檢查地點是否已被選中
             if (!location) {
                 displayMessage("請選擇交車/收車地點。", 'error');
                 document.getElementById('submit-button').disabled = false;
                 return;
             }
 
-
-            // 將日期和時間合併為一個完整的 ISO 字串，並轉換為 Firestore Timestamp
             const dateTimeString = `${date}T${time}:00`;
             const recordTime = new Date(dateTimeString);
             
@@ -335,15 +321,15 @@
             }
 
             const newRecord = {
-                date: date, // 儲存原始日期字串
-                time: time, // 儲存原始時間字串
+                date: date,
+                time: time,
                 action: action,
                 location: location,
                 plate: plate,
-                etcId: etcId, // 從對應表中獲取並儲存 ETC 卡號
-                mileage: parseInt(mileage, 10), // 新增 里程數 (轉換為數字)
+                etcId: etcId,
+                mileage: parseInt(mileage, 10),
                 notes: notes,
-                timestamp: Timestamp.fromDate(recordTime) // 儲存時間戳記用於排序
+                timestamp: Timestamp.fromDate(recordTime)
             };
 
             try {
@@ -351,8 +337,8 @@
                 await addDoc(collectionRef, newRecord);
                 displayMessage("紀錄儲存成功！", 'success');
                 document.getElementById('record-form').reset();
-                setupPlateEtcMapping(); // 重置表單後，重新設定車牌選單
-                setupLocationMapping(); // 重置表單後，重新設定地點選單
+                setupPlateEtcMapping(); 
+                setupLocationMapping();
             } catch (e) {
                 console.error("新增文件時發生錯誤:", e);
                 displayMessage(`儲存失敗: ${e.message}`, 'error');
@@ -365,12 +351,10 @@
         async function deleteLogRecord(id) {
             // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
             if (!db || !userId) {
-                // 訊息優化: 點出連線/認證問題，並使用 'error' 類型
                 displayMessage("應用程式初始化失敗或認證未完成，無法執行刪除操作。", 'error');
                 return;
             }
             
-            // 使用自定義模態框取代 alert/confirm
             const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的紀錄嗎？`);
             if (!confirmation) return;
 
@@ -388,14 +372,13 @@
 
         /** 設置車牌和 ETC 卡號的對應邏輯 (現在車牌選單會顯示 "車牌 (ETC)") */
         function setupPlateEtcMapping() {
-            // 1. 清空並填充車牌選擇器
             plateSelect.innerHTML = '<option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>'; 
             
             Object.keys(CAR_ETC_MAPPING).forEach(plateDescription => {
                 const etcId = CAR_ETC_MAPPING[plateDescription];
                 const option = document.createElement('option');
-                option.value = plateDescription; // Value 儲存完整的描述
-                option.textContent = `${plateDescription} (${etcId})`; // 顯示合併格式
+                option.value = plateDescription; 
+                option.textContent = `${plateDescription} (${etcId})`; 
                 plateSelect.appendChild(option);
             });
         }
@@ -412,9 +395,23 @@
             });
         }
         
-        // --- 資料顯示與監聽 (全表格顯示) ---
+        /** 顯示/隱藏詳細資訊 */
+        function toggleDetails(id) {
+            const detailRow = document.getElementById(`detail-row-${id}`);
+            const expandIcon = document.getElementById(`expand-icon-${id}`);
+            if (detailRow) {
+                const isHidden = detailRow.classList.toggle('hidden');
+                // 切換圖標：▼ (向下箭頭，隱藏中) vs ▲ (向上箭頭，展開中)
+                if (expandIcon) {
+                    expandIcon.textContent = isHidden ? '▼' : '▲';
+                }
+            }
+        }
+        // 將 JS 函數暴露給 HTML，以便在行內事件中使用
+        window.toggleDetails = toggleDetails;
 
-        /** 渲染紀錄列表 (全表格模式) */
+
+        /** 渲染紀錄列表 (點擊展開模式) */
         function renderRecords(records) {
             recordsTableBody.innerHTML = '';
             
@@ -455,27 +452,70 @@
                 const actionClass = record.action === '交車' ? 'delivery-color' : 'collection-color';
                 const recordId = record.id; 
                 
-                const row = document.createElement('tr');
-                row.className = "hover:bg-gray-50 transition duration-100";
+                // 1. 摘要行 (Summary Row) - 顯示簡潔資訊
+                const summaryRow = document.createElement('tr');
+                summaryRow.className = "cursor-pointer hover:bg-gray-50 transition duration-100 border-b border-gray-200";
+                summaryRow.onclick = (e) => {
+                    // 點擊行觸發展開，但排除點擊刪除按鈕
+                    if (!e.target.closest('.delete-btn-container')) {
+                         window.toggleDetails(recordId);
+                    }
+                };
                 
-                // 渲染所有欄位 (Excel 模式)
-                row.innerHTML = `
+                // 渲染 4 個摘要欄位 + 1 個操作欄位
+                summaryRow.innerHTML = `
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.date}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.time}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm font-semibold">
                         <span class="px-2 py-0.5 rounded-full text-xs ${actionClass}">${record.action}</span>
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.location}</td>
-                    <td class="px-3 py-3 text-sm text-gray-900 min-w-[200px]">${record.plate} 
-                        <span class="block text-xs text-gray-500 font-mono">${record.etcId}</span>
-                    </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-bold text-indigo-600">${record.mileage ? record.mileage.toLocaleString() : '—'}</td>
-                    <td class="px-3 py-3 text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis">${record.notes || '無'}</td>
+                    <td class="px-3 py-3 text-sm text-gray-900 min-w-[120px]">${record.location}</td>
+                    
+                    <!-- 展開/操作按鈕 -->
                     <td class="px-3 py-3 whitespace-nowrap text-center">
-                        <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 disabled:text-gray-400">刪除</button>
+                        <div class="flex items-center justify-center space-x-3">
+                            <span id="expand-icon-${recordId}" class="text-xl text-indigo-500 cursor-pointer">▼</span>
+                            <div class="delete-btn-container">
+                                <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150">刪除</button>
+                            </div>
+                        </div>
                     </td>
                 `;
-                recordsTableBody.appendChild(row);
+                recordsTableBody.appendChild(summaryRow);
+
+
+                // 2. 詳細資訊行 (Detail Row) - 預設隱藏
+                const detailRow = document.createElement('tr');
+                detailRow.id = `detail-row-${recordId}`;
+                detailRow.className = "hidden bg-gray-100 border-b border-gray-300"; 
+                
+                // 詳細資訊欄位跨越 5 欄位
+                detailRow.innerHTML = `
+                    <td colspan="5" class="p-4"> 
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700 p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
+                            
+                            <!-- 車牌/ETC -->
+                            <div class="space-y-1">
+                                <p class="font-medium text-gray-500">車牌 (ETC 卡號)</p>
+                                <p class="font-semibold text-gray-900">${record.plate}</p>
+                                <p class="font-mono text-xs text-gray-500">${record.etcId || '—'}</p>
+                            </div>
+                            
+                            <!-- 里程數 -->
+                            <div class="space-y-1">
+                                <p class="font-medium text-gray-500">里程數 (Km)</p>
+                                <p class="font-bold text-indigo-700">${record.mileage ? record.mileage.toLocaleString() + ' Km' : '—'}</p>
+                            </div>
+
+                            <!-- 備註 -->
+                            <div class="space-y-1 sm:col-span-3">
+                                <p class="font-medium text-gray-500">需求 / 備註</p>
+                                <p class="text-gray-900 whitespace-pre-wrap">${record.notes || '無備註'}</p>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                recordsTableBody.appendChild(detailRow);
             });
         }
 
