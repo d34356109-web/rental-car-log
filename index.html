@@ -38,7 +38,7 @@
     <!-- 主容器 -->
     <div class="max-w-7xl mx-auto">
         <header class="mb-8 p-4 bg-white shadow-lg rounded-xl">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">租車交車紀錄控管中心</h1>
+            <h1 class="3xl font-bold text-gray-800 mb-2">租車交車紀錄控管中心</h1>
             <p class="text-gray-500">使用 Firestore 儲存紀錄，資料即時同步。當前使用者 ID: <span id="user-id-display" class="font-mono text-xs bg-gray-100 p-1 rounded">載入中...</span></p>
         </header>
 
@@ -547,9 +547,11 @@
         
         // --- 模態視窗邏輯 ---
         function openCollectionModal(recordId, mode) {
+            console.log(`Attempting to open modal for Record ID: ${recordId}, Mode: ${mode}`); // 診斷日誌
             // Debug Fix: Retrieve the record object from the global array using the ID
             const record = allRecords.find(r => r.id === recordId);
             if (!record) {
+                console.error(`ERROR: Record ID ${recordId} not found in allRecords array. Data might be stale.`);
                 displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
                 return;
             }
