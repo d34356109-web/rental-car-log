@@ -119,16 +119,13 @@
             <!-- 紀錄表格容器 -->
             <div class="log-container overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <!-- 在小螢幕上隱藏表格標頭，改用卡片佈局 -->
+                    <!-- 表格標頭調整為簡潔模式 -->
                     <thead class="bg-gray-50 sticky top-0 hidden sm:table-header-group">
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期/時間</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">動作</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ETC 卡號</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">里程數 (Km)</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">需求 / 備註</th>
+                            <!-- 簡潔模式下，其他資料欄位合併為一個空白佔位或詳細資訊指示 -->
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" colspan="5">詳細資訊 (點擊展開)</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                         </tr>
                     </thead>
@@ -203,7 +200,6 @@
         const sortButton = document.getElementById('sort-button');
         const sortIcon = document.getElementById('sort-icon');
         const plateSelect = document.getElementById('record-plate');
-        // ETC 輸入欄位已移除，因此 etcInput 變數不再需要
         const locationSelect = document.getElementById('record-location'); // 取得地點 select 元素
 
         /** 顯示應用程式訊息 */
@@ -395,8 +391,6 @@
                 option.textContent = `${plateDescription} (${etcId})`; // 顯示合併格式
                 plateSelect.appendChild(option);
             });
-            
-            // 由於 ETC 輸入欄位已移除，無需清空 etcInput
         }
 
         /** 設置地點選擇器 */
@@ -412,6 +406,22 @@
         }
         
         // --- 資料顯示與監聽 ---
+
+        /** 顯示/隱藏詳細資訊 */
+        function toggleDetails(id) {
+            const detailRow = document.getElementById(`detail-row-${id}`);
+            const expandIcon = document.getElementById(`expand-icon-${id}`);
+            if (detailRow) {
+                const isHidden = detailRow.classList.toggle('hidden');
+                // 切換圖標：▼ (向下箭頭，隱藏中) vs ▲ (向上箭頭，展開中)
+                if (expandIcon) {
+                    expandIcon.textContent = isHidden ? '▼' : '▲';
+                }
+            }
+        }
+        // 將 JS 函數暴露給 HTML，以便在行內事件中使用
+        window.toggleDetails = toggleDetails;
+
 
         /** 渲染紀錄列表 */
         function renderRecords(records) {
@@ -452,57 +462,74 @@
 
             filteredRecords.forEach(record => {
                 const actionClass = record.action === '交車' ? 'delivery-color' : 'collection-color';
+                const recordId = record.id; // 用於詳細資訊行的唯一 ID
+
+                // 1. 摘要行 (Summary Row) - 顯示簡潔資訊
+                const summaryRow = document.createElement('tr');
+                // 整個行可點擊展開詳細資訊
+                summaryRow.className = "cursor-pointer transition duration-100 hover:bg-gray-50 bg-white sm:table-row block border-b border-gray-200";
+                summaryRow.onclick = () => window.toggleDetails(recordId);
                 
-                // 針對手機畫面 (sm: 以下) 調整佈局為卡片式
-                const row = document.createElement('tr');
-                // 在手機上是 block/card，平板以上是 table-row
-                row.className = "mb-4 sm:mb-0 block sm:table-row border border-gray-200 sm:border-0 rounded-lg shadow-md sm:shadow-none p-3 sm:p-0 transition duration-200 hover:shadow-lg sm:hover:shadow-none";
-                
-                // 在手機上每個 TD 都變成 block，並加上標籤 (sm:hidden)
-                row.innerHTML = `
-                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm text-gray-900 block sm:table-cell border-b sm:border-0">
+                summaryRow.innerHTML = `
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 block sm:table-cell">
                         <span class="sm:hidden font-medium text-gray-500 mr-2">日期/時間:</span>
                         <span class="font-bold">${record.date}</span><br>
                         <span class="text-xs text-gray-500">${record.time}</span>
                     </td>
-                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-semibold block sm:table-cell border-b sm:border-0">
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-semibold block sm:table-cell">
                         <span class="sm:hidden font-medium text-gray-500 mr-2">動作:</span>
                         <span class="px-2 py-1 rounded-full text-xs ${actionClass}">${record.action}</span>
                     </td>
-                    <td class="px-3 py-1 sm:py-3 text-sm text-gray-700 max-w-xs block sm:table-cell border-b sm:border-0">
-                        <span class="sm:hidden font-medium text-gray-500 mr-2">地點:</span>
-                        ${record.location}
+                    <!-- 合併剩餘的 5 個欄位為一個 Cell，顯示點擊指示 -->
+                    <td colspan="5" class="hidden sm:table-cell text-left text-gray-500 text-sm">
+                        <span id="expand-icon-${recordId}" class="mr-1 inline-block">▼</span>
+                        點擊查看詳細資訊...
                     </td>
-                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-mono text-gray-900 block sm:table-cell border-b sm:border-0">
-                        <span class="sm:hidden font-medium text-gray-500 mr-2">車牌:</span>
-                        ${record.plate}
-                    </td>
-                    <td class="px-3 py-1 sm:py-3 text-sm text-gray-700 block sm:table-cell border-b sm:border-0">
-                        <span class="sm:hidden font-medium text-gray-500 mr-2">ETC 卡號:</span>
-                        ${record.etcId || '—'}
-                    </td>
-                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-bold text-indigo-700 block sm:table-cell border-b sm:border-0">
-                        <span class="sm:hidden font-medium text-gray-500 mr-2">里程數:</span>
-                        ${record.mileage ? record.mileage.toLocaleString() + ' Km' : '—'}
-                    </td>
-                    <td class="px-3 py-1 sm:py-3 text-sm text-gray-500 max-w-md block sm:table-cell border-b sm:border-0">
-                        <span class="sm:hidden font-medium text-gray-500 mr-2">備註:</span>
-                        ${record.notes}
-                    </td>
-                    <td class="px-3 py-1 sm:py-3 whitespace-nowrap text-sm font-medium block sm:table-cell text-right sm:text-left">
-                        <button onclick="window.deleteLogRecord('${record.id}')" class="text-red-600 hover:text-red-900 transition duration-150">刪除</button>
+
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium block sm:table-cell text-right sm:text-left">
+                        <button onclick="event.stopPropagation(); window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150">刪除</button>
                     </td>
                 `;
-                recordsTableBody.appendChild(row);
-            });
+                recordsTableBody.appendChild(summaryRow);
 
-            if (filteredRecords.length === 0 && searchTerm) {
-                noRecordsMessage.textContent = '找不到符合查詢條件的紀錄。';
-                noRecordsMessage.classList.remove('hidden');
-            } else if (filteredRecords.length === 0) {
-                noRecordsMessage.textContent = '目前沒有任何紀錄。';
-                noRecordsMessage.classList.remove('hidden');
-            }
+
+                // 2. 詳細資訊行 (Detail Row) - 預設隱藏
+                const detailRow = document.createElement('tr');
+                detailRow.id = `detail-row-${recordId}`;
+                // 預設隱藏，佔滿所有欄位
+                detailRow.className = "hidden bg-gray-50 border-b border-gray-200"; 
+                
+                // 8 欄位合併
+                detailRow.innerHTML = `
+                    <td colspan="8" class="p-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-gray-700 p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
+                            <div class="font-bold text-gray-800 lg:col-span-4 border-b pb-1 mb-1 text-base">車輛與地點細節</div>
+
+                            <div class="space-y-1">
+                                <p class="font-medium text-gray-500">地點</p>
+                                <p class="font-semibold text-gray-900">${record.location}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="font-medium text-gray-500">車牌</p>
+                                <p class="font-semibold text-gray-900">${record.plate}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="font-medium text-gray-500">ETC 卡號</p>
+                                <p class="font-mono text-xs text-gray-800 bg-yellow-100 p-1 rounded inline-block">${record.etcId || '—'}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="font-medium text-gray-500">里程數 (Km)</p>
+                                <p class="font-bold text-indigo-700">${record.mileage ? record.mileage.toLocaleString() + ' Km' : '—'}</p>
+                            </div>
+                            <div class="space-y-1 lg:col-span-4">
+                                <p class="font-medium text-gray-500">需求 / 備註</p>
+                                <p class="text-gray-900 whitespace-pre-wrap">${record.notes || '無備註'}</p>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                recordsTableBody.appendChild(detailRow);
+            });
         }
 
         /** 從 Firestore 監聽紀錄的實時更新 */
@@ -536,9 +563,7 @@
             
             // 設置車牌選項和 ETC 邏輯
             setupPlateEtcMapping();
-            // 由於 ETC 輸入欄位已移除，handlePlateChange 不再需要監聽
-            // plateSelect.addEventListener('change', handlePlateChange);
-
+            
             document.getElementById('record-form').addEventListener('submit', addRecord);
             
             // 將 JS 函數暴露給 HTML，以便在行內事件中使用 (如刪除按鈕)
