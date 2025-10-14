@@ -129,13 +129,12 @@
             <!-- 紀錄表格容器 (恢復響應式表格) -->
             <div class="log-container overflow-x-auto rounded-lg border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <!-- 表格標頭：簡潔顯示 (5 欄位) -->
+                    <!-- 表格標頭：簡潔顯示 (4 欄位) -->
                     <thead class="bg-gray-50 sticky top-0">
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">交車日期/時間</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌</th>
                             <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">收車/操作</th>
                         </tr>
                     </thead>
@@ -547,7 +546,14 @@
         }
         
         // --- 模態視窗邏輯 ---
-        function openCollectionModal(recordId, record, mode) {
+        function openCollectionModal(recordId, mode) {
+            // Debug Fix: Retrieve the record object from the global array using the ID
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) {
+                displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
+                return;
+            }
+            
             const modal = document.getElementById('collection-modal');
             const modalContent = document.getElementById('collection-modal-content');
             
@@ -746,12 +752,12 @@
                     statusText = '待登錄里程';
                     statusColor = 'bg-orange-100 text-orange-700 font-bold';
                     actionMode = 'mileage';
-                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', record, '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition duration-150">登錄里程</button>`;
+                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition duration-150">登錄里程</button>`;
                 } else {
                     statusText = '待收車';
                     statusColor = 'bg-yellow-100 text-yellow-700 font-bold';
                     actionMode = 'full';
-                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', record, '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150">收車</button>`;
+                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150">收車</button>`;
                 }
 
                 // 1. 摘要行 (Summary Row)
@@ -770,7 +776,6 @@
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.deliveryDate} ${record.deliveryTime}</td>
                     <td class="px-3 py-3 text-sm text-gray-900">${record.deliveryLocation}</td>
-                    <td class="px-3 py-3 text-sm text-gray-900">${record.plate.split(' ')[0]}</td>
                     
                     <!-- 展開/操作按鈕 -->
                     <td class="px-3 py-3 whitespace-nowrap text-center action-cell">
@@ -805,9 +810,9 @@
                 ` : `<div class="sm:col-span-3 border-b pb-2 mb-2"><p class="font-bold text-lg text-gray-800">客戶資訊: 無記錄</p></div>`;
 
 
-                // 詳細資訊欄位跨越 5 欄位
+                // 詳細資訊欄位跨越 4 欄位
                 detailRow.innerHTML = `
-                    <td colspan="5" class="p-4"> 
+                    <td colspan="4" class="p-4"> 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700 p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
                             
                             <!-- 客戶資訊 -->
