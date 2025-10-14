@@ -13,7 +13,7 @@
             font-family: 'Inter', sans-serif;
             background-color: #f7f9fb;
         }
-        /* 自定義滾動條樣式，讓表格更好看 */
+        /* 自定義滾動條樣式 */
         .log-container::-webkit-scrollbar {
             height: 8px;
         }
@@ -28,28 +28,11 @@
         .delivery-color { background-color: #e0f2f1; color: #0f766e; } /* 淺青綠 */
         .collection-color { background-color: #fef3c7; color: #a16207; } /* 淺金黃 */
         
-        /* === 專為手機 (iOS/Safari) 優化：強制列表為單行卡片式 Flex 佈局 === */
-        @media (max-width: 639px) { 
-            .mobile-list-item {
-                display: flex !important; /* 強制 TR 以 Flex 顯示 */
-                align-items: center;
-                justify-content: space-between;
-                min-height: 4rem; /* 確保足夠的點擊區域 */
-            }
-            .mobile-list-item td {
-                display: flex !important;
-                padding-top: 12px;
-                padding-bottom: 12px;
-            }
-            .mobile-list-item td:first-child {
-                flex-grow: 1; /* 摘要佔用大部分空間 */
-                align-items: center;
-            }
-            .mobile-list-item td:last-child {
-                flex-shrink: 0; /* 操作區塊緊湊 */
-                justify-content: flex-end;
-            }
+        /* 確保表格在手機上可以橫向滾動 */
+        .log-table {
+            min-width: 800px; /* 確保表格足夠寬，以容納所有欄位 */
         }
+
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -138,14 +121,20 @@
                 </button>
             </div>
 
-            <!-- 紀錄表格容器 -->
-            <div class="log-container overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <!-- 表格標頭調整為簡潔模式 (2 欄位) -->
-                    <thead class="bg-gray-50 sticky top-0 hidden sm:table-header-group">
+            <!-- 紀錄表格容器 (添加水平滾動) -->
+            <div class="log-container overflow-x-auto rounded-lg border border-gray-200">
+                <table class="log-table min-w-full divide-y divide-gray-200">
+                    <!-- 表格標頭：包含所有欄位 -->
+                    <thead class="bg-gray-50 sticky top-0">
                         <tr>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">紀錄摘要 (動作, 日期, 時間)</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">詳細資訊/操作</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">時間</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">動作</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌 (ETC 卡號)</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">里程數 (Km)</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">備註</th>
+                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                         </tr>
                     </thead>
                     <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
@@ -184,7 +173,6 @@
 
         // =================================================================
         // *** 固定車牌與 ETC 卡號對應表 (車牌下拉選單用) ***
-        // 鍵 (Key) 是完整的車牌描述，值 (Value) 是 ETC 卡號
         // =================================================================
         const CAR_ETC_MAPPING = {
             "なにわ334わ8888 40系": "9160 0000 1326 8609",
@@ -424,25 +412,9 @@
             });
         }
         
-        // --- 資料顯示與監聽 ---
+        // --- 資料顯示與監聽 (全表格顯示) ---
 
-        /** 顯示/隱藏詳細資訊 */
-        function toggleDetails(id) {
-            const detailRow = document.getElementById(`detail-row-${id}`);
-            const expandIcon = document.getElementById(`expand-icon-${id}`);
-            if (detailRow) {
-                const isHidden = detailRow.classList.toggle('hidden');
-                // 切換圖標：▼ (向下箭頭，隱藏中) vs ▲ (向上箭頭，展開中)
-                if (expandIcon) {
-                    expandIcon.textContent = isHidden ? '▼' : '▲';
-                }
-            }
-        }
-        // 將 JS 函數暴露給 HTML，以便在行內事件中使用
-        window.toggleDetails = toggleDetails;
-
-
-        /** 渲染紀錄列表 */
+        /** 渲染紀錄列表 (全表格模式) */
         function renderRecords(records) {
             recordsTableBody.innerHTML = '';
             
@@ -473,7 +445,7 @@
                     record.location.toLowerCase().includes(searchTerm) ||
                     record.plate.toLowerCase().includes(searchTerm) ||
                     record.notes.toLowerCase().includes(searchTerm) ||
-                    record.etcId.toLowerCase().includes(searchTerm) || // 搜尋加入 ETC 卡號
+                    record.etcId.toLowerCase().includes(searchTerm) || 
                     record.action.toLowerCase().includes(searchTerm)
                 );
             });
@@ -481,83 +453,29 @@
 
             filteredRecords.forEach(record => {
                 const actionClass = record.action === '交車' ? 'delivery-color' : 'collection-color';
-                const recordId = record.id; // 用於詳細資訊行的唯一 ID
-
-                // 1. 摘要行 (Summary Row) - 顯示簡潔資訊
-                const summaryRow = document.createElement('tr');
-                // 加入 mobile-list-item class 以啟用自定義 Flex 佈局
-                summaryRow.className = "cursor-pointer transition duration-100 hover:bg-gray-50 bg-white sm:table-row mobile-list-item border-b border-gray-200";
-                summaryRow.onclick = (e) => {
-                    // Prevent toggle if the click target is the delete button or its container
-                    if (!e.target.closest('.delete-btn-container')) {
-                         window.toggleDetails(recordId);
-                    }
-                };
+                const recordId = record.id; 
                 
-                // --- 簡潔顯示，合併成一列 ---
-                summaryRow.innerHTML = `
-                    <!-- 1. 紀錄摘要 (佔滿空間) -->
-                    <td class="px-3 py-3 text-sm text-gray-900 sm:table-cell font-medium">
-                        <div class="flex items-center space-x-2">
-                            <!-- 顯示：日期 時間 動作 (用小圓角標籤) -->
-                            <span class="font-bold text-base whitespace-nowrap">${record.date} ${record.time}</span>
-                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${actionClass} whitespace-nowrap">${record.action}</span>
-                        </div>
-                        <!-- 手機版提示，現在由自定義 CSS 隱藏，不影響桌面 flex-grow -->
+                const row = document.createElement('tr');
+                row.className = "hover:bg-gray-50 transition duration-100";
+                
+                // 渲染所有欄位 (Excel 模式)
+                row.innerHTML = `
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.date}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.time}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-semibold">
+                        <span class="px-2 py-0.5 rounded-full text-xs ${actionClass}">${record.action}</span>
                     </td>
-                    
-                    <!-- 2. 詳細資訊/操作 (固定寬度) -->
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium sm:table-cell text-right sm:text-left">
-                        <div class="flex items-center justify-end space-x-4">
-                            <!-- 展開指示器 (Mobile & Desktop) -->
-                            <span id="expand-icon-${recordId}" class="text-xl text-indigo-500 sm:text-base">▼</span>
-                            
-                            <!-- 刪除按鈕容器 -->
-                            <div class="delete-btn-container">
-                                <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 disabled:text-gray-400">刪除</button>
-                            </div>
-                        </div>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.location}</td>
+                    <td class="px-3 py-3 text-sm text-gray-900 min-w-[200px]">${record.plate} 
+                        <span class="block text-xs text-gray-500 font-mono">${record.etcId}</span>
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-bold text-indigo-600">${record.mileage ? record.mileage.toLocaleString() : '—'}</td>
+                    <td class="px-3 py-3 text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis">${record.notes || '無'}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-center">
+                        <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 disabled:text-gray-400">刪除</button>
                     </td>
                 `;
-                recordsTableBody.appendChild(summaryRow);
-
-
-                // 2. 詳細資訊行 (Detail Row) - 預設隱藏
-                const detailRow = document.createElement('tr');
-                detailRow.id = `detail-row-${recordId}`;
-                // 預設隱藏，佔滿所有欄位
-                detailRow.className = "hidden bg-gray-50 border-b border-gray-200"; 
-                
-                // 詳細資訊欄位現在只需要跨越 2 欄位
-                detailRow.innerHTML = `
-                    <td colspan="2" class="p-4"> 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-gray-700 p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
-                            <div class="font-bold text-gray-800 lg:col-span-4 border-b pb-1 mb-1 text-base">車輛與地點細節</div>
-
-                            <div class="space-y-1">
-                                <p class="font-medium text-gray-500">地點</p>
-                                <p class="font-semibold text-gray-900">${record.location}</p>
-                            </div>
-                            <div class="space-y-1">
-                                <p class="font-medium text-gray-500">車牌</p>
-                                <p class="font-semibold text-gray-900">${record.plate}</p>
-                            </div>
-                            <div class="space-y-1">
-                                <p class="font-medium text-gray-500">ETC 卡號</p>
-                                <p class="font-mono text-xs text-gray-800 bg-yellow-100 p-1 rounded inline-block">${record.etcId || '—'}</p>
-                            </div>
-                            <div class="space-y-1">
-                                <p class="font-medium text-gray-500">里程數 (Km)</p>
-                                <p class="font-bold text-indigo-700">${record.mileage ? record.mileage.toLocaleString() + ' Km' : '—'}</p>
-                            </div>
-                            <div class="space-y-1 lg:col-span-4">
-                                <p class="font-medium text-gray-500">需求 / 備註</p>
-                                <p class="text-gray-900 whitespace-pre-wrap">${record.notes || '無備註'}</p>
-                            </div>
-                        </div>
-                    </td>
-                `;
-                recordsTableBody.appendChild(detailRow);
+                recordsTableBody.appendChild(row);
             });
         }
 
