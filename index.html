@@ -66,34 +66,36 @@
                     </select>
                 </div>
 
-                <!-- 地點與車牌 -->
+                <!-- 地點 (改為下拉選單, 佔兩欄) -->
                 <div class="md:col-span-2">
-                    <label for="record-location" class="block text-sm font-medium text-gray-700">地點</label>
-                    <input type="text" id="record-location" placeholder="例如: 成田機場(BR198) T1" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌</label>
-                    <input type="text" id="record-plate" placeholder="例如: 3333" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    <label for="record-location" class="block text-sm font-medium text-gray-700">地點 (請選擇)</label>
+                    <!-- 選項將由 JS 填充 -->
+                    <select id="record-location" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    </select>
                 </div>
                 
-                <!-- 新增：ETC 卡號與里程數 -->
+                <!-- 車牌 (合併顯示 ETC 卡號) -->
                 <div>
-                    <label for="record-etc-id" class="block text-sm font-medium text-gray-700">ETC 卡號 (固定車號)</label>
-                    <input type="text" id="record-etc-id" placeholder="例如: 987654321" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌 (ETC 卡號)</label>
+                    <!-- 選項將由 JS 填充 -->
+                    <select id="record-plate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>
+                    </select>
                 </div>
+                
+                <!-- 里程數 (佔一欄) -->
                 <div>
                     <label for="record-mileage" class="block text-sm font-medium text-gray-700">里程數 (Km)</label>
                     <input type="number" id="record-mileage" placeholder="例如: 12500" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
-                <!-- 由於下一欄是 span 3，此處無需佔位符 -->
 
-                <!-- 需求/備註 -->
-                <div class="md:col-span-3">
+                <!-- 需求/備註 (佔兩欄) -->
+                <div class="md:col-span-2">
                     <label for="record-notes" class="block text-sm font-medium text-gray-700">需求 / 備註 (包含兒童座椅、車型等)</label>
                     <textarea id="record-notes" rows="2" placeholder="例如: 兩張兒童座椅(2歲跟5歲)；車型: Toyota 40系" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                 </div>
 
-                <!-- 提交按鈕 -->
+                <!-- 提交按鈕 (佔三欄) -->
                 <div class="md:col-span-3 flex justify-end">
                     <button type="submit" id="submit-button" class="mt-4 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400">
                         儲存紀錄
@@ -164,6 +166,28 @@
         const YOUR_PROJECT_ID = "rentalcarlog-app"; 
         // =================================================================
 
+        // =================================================================
+        // *** 固定車牌與 ETC 卡號對應表 (車牌下拉選單用) ***
+        // 鍵 (Key) 是完整的車牌描述，值 (Value) 是 ETC 卡號
+        // =================================================================
+        const CAR_ETC_MAPPING = {
+            "なにわ334わ8888 40系": "9160 0000 1326 8609",
+            "和泉330わ3333 7座 中文導航": "9160 0000 1326 6207",
+            "成田331わ7777 總統座": "9160 0000 1326 6009",
+            "成田331わ88 4WD 8座": "9160 0000 1410 6501",
+        };
+
+        // =================================================================
+        // *** 地點選項列表 (地點下拉選單用) ***
+        // =================================================================
+        const LOCATION_OPTIONS = [
+            "成田空港T1",
+            "成田空港T2",
+            "羽田空港T3",
+            "東京"
+        ];
+        // =================================================================
+
         let app;
         let db;
         let auth;
@@ -178,6 +202,9 @@
         const userIdDisplay = document.getElementById('user-id-display');
         const sortButton = document.getElementById('sort-button');
         const sortIcon = document.getElementById('sort-icon');
+        const plateSelect = document.getElementById('record-plate');
+        // ETC 輸入欄位已移除，因此 etcInput 變數不再需要
+        const locationSelect = document.getElementById('record-location'); // 取得地點 select 元素
 
         /** 顯示應用程式訊息 */
         function displayMessage(text, type = 'info') {
@@ -208,8 +235,6 @@
             const submitButton = document.getElementById('submit-button'); // 取得按鈕元素
             
             try {
-                // 這裡不再需要檢查 placeholder，因為設定已經寫死
-                
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
@@ -272,12 +297,29 @@
             const date = document.getElementById('record-date').value;
             const time = document.getElementById('record-time').value;
             const action = document.getElementById('record-action').value;
-            const location = document.getElementById('record-location').value;
-            const plate = document.getElementById('record-plate').value;
-            // 捕捉新增的 ETC 卡號和里程數
-            const etcId = document.getElementById('record-etc-id').value;
+            const location = locationSelect.value; // 從 select 取得地點
+            const plate = plateSelect.value; // 從 select 取得車牌 (完整的描述)
+            
+            // 透過選定的車牌，自動從對應表中獲取 ETC 卡號
+            const etcId = CAR_ETC_MAPPING[plate]; 
+            
             const mileage = document.getElementById('record-mileage').value;
             const notes = document.getElementById('record-notes').value || '';
+
+            // 檢查車牌和 ETC 是否已被選中/填充
+            if (!plate || !etcId) {
+                displayMessage("請選擇車牌 (ETC 卡號會自動從選單中帶入)。", 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+
+            // 檢查地點是否已被選中
+            if (!location) {
+                displayMessage("請選擇交車/收車地點。", 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+
 
             // 將日期和時間合併為一個完整的 ISO 字串，並轉換為 Firestore Timestamp
             const dateTimeString = `${date}T${time}:00`;
@@ -295,7 +337,7 @@
                 action: action,
                 location: location,
                 plate: plate,
-                etcId: etcId, // 新增 ETC 卡號
+                etcId: etcId, // 從對應表中獲取並儲存 ETC 卡號
                 mileage: parseInt(mileage, 10), // 新增 里程數 (轉換為數字)
                 notes: notes,
                 timestamp: Timestamp.fromDate(recordTime) // 儲存時間戳記用於排序
@@ -306,6 +348,8 @@
                 await addDoc(collectionRef, newRecord);
                 displayMessage("紀錄儲存成功！", 'success');
                 document.getElementById('record-form').reset();
+                setupPlateEtcMapping(); // 重置表單後，重新設定車牌選單
+                setupLocationMapping(); // 重置表單後，重新設定地點選單
             } catch (e) {
                 console.error("新增文件時發生錯誤:", e);
                 displayMessage(`儲存失敗: ${e.message}`, 'error');
@@ -335,6 +379,36 @@
                 console.error("刪除文件時發生錯誤:", e);
                 displayMessage(`刪除失敗: ${e.message}`, 'error');
             }
+        }
+        
+        // --- 下拉選單設定邏輯 ---
+
+        /** 設置車牌和 ETC 卡號的對應邏輯 (現在車牌選單會顯示 "車牌 (ETC)") */
+        function setupPlateEtcMapping() {
+            // 1. 清空並填充車牌選擇器
+            plateSelect.innerHTML = '<option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>'; 
+            
+            Object.keys(CAR_ETC_MAPPING).forEach(plateDescription => {
+                const etcId = CAR_ETC_MAPPING[plateDescription];
+                const option = document.createElement('option');
+                option.value = plateDescription; // Value 儲存完整的描述
+                option.textContent = `${plateDescription} (${etcId})`; // 顯示合併格式
+                plateSelect.appendChild(option);
+            });
+            
+            // 由於 ETC 輸入欄位已移除，無需清空 etcInput
+        }
+
+        /** 設置地點選擇器 */
+        function setupLocationMapping() {
+            locationSelect.innerHTML = '<option value="" disabled selected>請選擇交車/收車地點</option>'; 
+            
+            LOCATION_OPTIONS.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location;
+                option.textContent = location;
+                locationSelect.appendChild(option);
+            });
         }
         
         // --- 資料顯示與監聽 ---
@@ -456,6 +530,15 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             initFirebase();
+            
+            // 設置地點選擇器
+            setupLocationMapping();
+            
+            // 設置車牌選項和 ETC 邏輯
+            setupPlateEtcMapping();
+            // 由於 ETC 輸入欄位已移除，handlePlateChange 不再需要監聽
+            // plateSelect.addEventListener('change', handlePlateChange);
+
             document.getElementById('record-form').addEventListener('submit', addRecord);
             
             // 將 JS 函數暴露給 HTML，以便在行內事件中使用 (如刪除按鈕)
