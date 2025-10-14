@@ -27,6 +27,10 @@
         /* 交車和收車的顏色標記 */
         .delivery-color { background-color: #e0f2f1; color: #0f766e; } /* 淺青綠 */
         .collection-color { background-color: #fef3c7; color: #a16207; } /* 淺金黃 */
+        /* 模態視窗背景 */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -41,34 +45,25 @@
         <!-- 訊息/載入指示器 -->
         <div id="message-box" class="mb-6 p-3 rounded-lg text-sm transition-all duration-300 hidden"></div>
 
-        <!-- 新增紀錄表單 (行動裝置上為單欄，平板以上為三欄) -->
+        <!-- 新增紀錄表單 (行動裝置上為單欄，平板以上為多欄) - 只用於交車 -->
         <div class="bg-white p-6 shadow-xl rounded-xl mb-10">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">新增交車/收車紀錄</h2>
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">新增「交車」紀錄 (開啟新租賃週期)</h2>
             <form id="record-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
-                <!-- 日期與時間 -->
+                <!-- 動作 (固定為交車) -->
+                <input type="hidden" id="record-action" value="交車">
+
+                <!-- 交車資訊區塊 -->
                 <div>
-                    <label for="record-date" class="block text-sm font-medium text-gray-700">日期</label>
+                    <label for="record-date" class="block text-sm font-medium text-gray-700">交車日期</label>
                     <input type="date" id="record-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
-                    <label for="record-time" class="block text-sm font-medium text-gray-700">時間</label>
+                    <label for="record-time" class="block text-sm font-medium text-gray-700">交車時間</label>
                     <input type="time" id="record-time" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
-
-                <!-- 動作 (交車/收車) -->
                 <div>
-                    <label for="record-action" class="block text-sm font-medium text-gray-700">動作</label>
-                    <select id="record-action" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="交車">交車 (Delivery)</option>
-                        <option value="收車">收車 (Collection)</option>
-                    </select>
-                </div>
-
-                <!-- 地點 (改為下拉選單, 佔兩欄) -->
-                <div class="md:col-span-2">
-                    <label for="record-location" class="block text-sm font-medium text-gray-700">地點 (請選擇)</label>
-                    <!-- 選項將由 JS 填充 -->
+                    <label for="record-location" class="block text-sm font-medium text-gray-700">交車地點 (請選擇)</label>
                     <select id="record-location" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </select>
                 </div>
@@ -76,28 +71,44 @@
                 <!-- 車牌 (合併顯示 ETC 卡號) -->
                 <div>
                     <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌 (ETC 卡號)</label>
-                    <!-- 選項將由 JS 填充 -->
                     <select id="record-plate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>
                     </select>
                 </div>
                 
-                <!-- 里程數 (佔一欄) -->
+                <!-- 里程數 (交車時的起始里程) -->
                 <div>
-                    <label for="record-mileage" class="block text-sm font-medium text-gray-700">里程數 (Km)</label>
+                    <label for="record-mileage" class="block text-sm font-medium text-gray-700">起始里程數 (Km)</label>
                     <input type="number" id="record-mileage" placeholder="例如: 12500" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
-                <!-- 需求/備註 (佔兩欄) -->
+                <!-- 需求/備註 -->
                 <div class="md:col-span-2">
-                    <label for="record-notes" class="block text-sm font-medium text-gray-700">需求 / 備註 (包含兒童座椅、車型等)</label>
+                    <label for="record-notes" class="block text-sm font-medium text-gray-700">需求 / 備註 (交車資訊)</label>
                     <textarea id="record-notes" rows="2" placeholder="例如: 兩張兒童座椅(2歲跟5歲)；車型: Toyota 40系" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                 </div>
+                
+                <!-- 客戶資料區塊 - 已移動至備註下方 -->
+                <div class="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 mt-4">
+                    <div class="sm:col-span-3 text-sm font-semibold text-gray-700 border-b pb-2 mb-2">客戶資料 (選填)</div>
+                    <div>
+                        <label for="customer-name" class="block text-sm font-medium text-gray-700">客戶姓名</label>
+                        <input type="text" id="customer-name" placeholder="例如: 王小明" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="customer-phone" class="block text-sm font-medium text-gray-700">聯絡電話</label>
+                        <input type="tel" id="customer-phone" placeholder="例如: 0912345678" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="customer-dob" class="block text-sm font-medium text-gray-700">出生年月日</label>
+                        <input type="date" id="customer-dob" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                </div>
 
-                <!-- 提交按鈕 (佔三欄) -->
+                <!-- 提交按鈕 -->
                 <div class="md:col-span-3 flex justify-end">
                     <button type="submit" id="submit-button" class="mt-4 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400">
-                        儲存紀錄
+                        新增交車紀錄
                     </button>
                 </div>
             </form>
@@ -105,7 +116,7 @@
 
         <!-- 紀錄列表與查詢 -->
         <div class="bg-white p-6 shadow-xl rounded-xl">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">所有紀錄</h2>
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">所有租賃週期紀錄</h2>
             
             <!-- 查詢/排序控制項 -->
             <div class="flex flex-col sm:flex-row gap-4 mb-4">
@@ -115,17 +126,17 @@
                 </button>
             </div>
 
-            <!-- 紀錄表格容器 (移除水平滾動，恢復響應式表格) -->
+            <!-- 紀錄表格容器 (恢復響應式表格) -->
             <div class="log-container overflow-x-auto rounded-lg border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-200">
                     <!-- 表格標頭：簡潔顯示 (5 欄位) -->
                     <thead class="bg-gray-50 sticky top-0">
                         <tr>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">時間</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">動作</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">交車日期/時間</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
-                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">詳細/操作</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌</th>
+                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">收車/操作</th>
                         </tr>
                     </thead>
                     <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
@@ -138,11 +149,58 @@
 
     </div>
 
+    <!-- 收車模態視窗 (Collection Modal) -->
+    <div id="collection-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0" id="collection-modal-content">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4" id="modal-title"></h3>
+            
+            <p class="text-sm text-gray-600 mb-4">正在為 <span id="modal-plate-display" class="font-bold text-indigo-600"></span> 記錄資訊。</p>
+
+            <form id="collection-form">
+                <input type="hidden" id="modal-record-id">
+                <input type="hidden" id="modal-mode"> <!-- 隱藏欄位用於判斷模式：'full' 或 'mileage' -->
+
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- 收車日期 -->
+                    <div id="modal-date-container">
+                        <label for="collection-date" class="block text-sm font-medium text-gray-700">收車日期</label>
+                        <input type="date" id="collection-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <!-- 收車時間 -->
+                    <div id="modal-time-container">
+                        <label for="collection-time" class="block text-sm font-medium text-gray-700">收車時間</label>
+                        <input type="time" id="collection-time" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <!-- 收車地點 -->
+                    <div class="col-span-2" id="modal-location-container">
+                        <label for="collection-location" class="block text-sm font-medium text-gray-700">收車地點 (請選擇)</label>
+                        <select id="collection-location" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        </select>
+                    </div>
+                    <!-- 結束里程數 -->
+                    <div class="col-span-2" id="modal-mileage-container">
+                        <label for="end-mileage" class="block text-sm font-medium text-gray-700">結束里程數 (Km)</label>
+                        <input type="number" id="end-mileage" placeholder="請輸入收車時里程數" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        <p class="text-xs text-gray-500 mt-1">交車里程數: <span id="modal-start-mileage"></span> Km</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="window.closeCollectionModal()" class="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150" id="collection-submit-btn">
+                        確認並儲存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // 設定 Firebase Debug Log
         setLogLevel('Debug');
@@ -198,7 +256,14 @@
         const sortButton = document.getElementById('sort-button');
         const sortIcon = document.getElementById('sort-icon');
         const plateSelect = document.getElementById('record-plate');
-        const locationSelect = document.getElementById('record-location'); // 取得地點 select 元素
+        const locationSelect = document.getElementById('record-location'); // 取得交車地點 select 元素
+        const collectionLocationSelect = document.getElementById('collection-location'); // 取得收車地點 select 元素
+        
+        // 新增的客戶資料輸入欄位
+        const customerNameInput = document.getElementById('customer-name');
+        const customerPhoneInput = document.getElementById('customer-phone');
+        const customerDobInput = document.getElementById('customer-dob');
+
 
         /** 顯示應用程式訊息 */
         function displayMessage(text, type = 'info') {
@@ -277,10 +342,9 @@
 
         // --- 資料操作 (CRUD) ---
 
-        /** 新增紀錄到 Firestore */
+        /** 新增紀錄到 Firestore (僅限交車) */
         async function addRecord(event) {
             event.preventDefault();
-            // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
             if (!db || !userId) {
                 displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
                 return;
@@ -288,9 +352,15 @@
 
             document.getElementById('submit-button').disabled = true;
 
+            // 客戶資料 (選填)
+            const customerName = customerNameInput.value || '';
+            const customerPhone = customerPhoneInput.value || '';
+            const customerDob = customerDobInput.value || '';
+
+            // 交車資訊 (必填)
             const date = document.getElementById('record-date').value;
             const time = document.getElementById('record-time').value;
-            const action = document.getElementById('record-action').value;
+            const action = document.getElementById('record-action').value; // 固定為 '交車'
             const location = locationSelect.value;
             const plate = plateSelect.value; 
             
@@ -304,9 +374,18 @@
                 document.getElementById('submit-button').disabled = false;
                 return;
             }
+            
+            // 檢查車牌是否被禁用 (二次防呆，確保選單未被繞過)
+            const selectedOption = plateSelect.options[plateSelect.selectedIndex];
+            if (selectedOption && selectedOption.disabled) {
+                 displayMessage("所選車牌目前正在租賃週期中，請先完成收車後再進行交車。", 'error');
+                 document.getElementById('submit-button').disabled = false;
+                 return;
+            }
+
 
             if (!location) {
-                displayMessage("請選擇交車/收車地點。", 'error');
+                displayMessage("請選擇交車地點。", 'error');
                 document.getElementById('submit-button').disabled = false;
                 return;
             }
@@ -321,29 +400,128 @@
             }
 
             const newRecord = {
-                date: date,
-                time: time,
-                action: action,
-                location: location,
+                // 客戶資料
+                customerName: customerName,
+                customerPhone: customerPhone,
+                customerDob: customerDob,
+
+                // 交車資訊
+                action: action, // 交車
+                deliveryDate: date,
+                deliveryTime: time,
+                deliveryLocation: location,
+                startMileage: parseInt(mileage, 10), // 起始里程
                 plate: plate,
                 etcId: etcId,
-                mileage: parseInt(mileage, 10),
                 notes: notes,
-                timestamp: Timestamp.fromDate(recordTime)
+                
+                // 收車資訊 (預設為空，表示週期開放)
+                collectionDate: null,
+                collectionTime: null,
+                collectionLocation: null,
+                endMileage: null,
+                
+                timestamp: Timestamp.fromDate(recordTime) // 使用交車時間作為主要排序
             };
 
             try {
                 const collectionRef = collection(db, getCollectionPath());
                 await addDoc(collectionRef, newRecord);
-                displayMessage("紀錄儲存成功！", 'success');
+                displayMessage("交車紀錄儲存成功！週期已開啟。", 'success');
                 document.getElementById('record-form').reset();
-                setupPlateEtcMapping(); 
-                setupLocationMapping();
+                setupLocationMapping(); // 重設地點下拉選單
             } catch (e) {
                 console.error("新增文件時發生錯誤:", e);
                 displayMessage(`儲存失敗: ${e.message}`, 'error');
             } finally {
                 document.getElementById('submit-button').disabled = false;
+            }
+        }
+
+        /** 更新紀錄 (收車或登錄里程) */
+        async function submitCollectionUpdate(event) {
+            event.preventDefault();
+            if (!db || !userId) {
+                displayMessage("資料庫連線或用戶認證失敗，無法完成收車。", 'error');
+                return;
+            }
+
+            const recordId = document.getElementById('modal-record-id').value;
+            const mode = document.getElementById('modal-mode').value;
+            
+            const collectionDate = document.getElementById('collection-date').value;
+            const collectionTime = document.getElementById('collection-time').value;
+            const collectionLocation = collectionLocationSelect.value;
+            const endMileageInput = document.getElementById('end-mileage').value;
+            
+            const updateData = {};
+            const collectionSubmitBtn = document.getElementById('collection-submit-btn');
+
+            // 取得起始里程 (用於里程檢查)
+            const startMileageText = document.getElementById('modal-start-mileage').textContent.replace(/,/g, '').split(' ')[0]; // 移除千位分隔符和 "Km"
+            const startMileage = parseInt(startMileageText, 10);
+            
+            collectionSubmitBtn.disabled = true;
+
+            if (mode === 'full') {
+                // --- 模式 1: 記錄時間/地點 (預收車) ---
+                if (!collectionDate || !collectionTime || !collectionLocation) {
+                    displayMessage("請填寫完整的收車時間和地點。", 'error');
+                    collectionSubmitBtn.disabled = false;
+                    return;
+                }
+
+                updateData.collectionDate = collectionDate;
+                updateData.collectionTime = collectionTime;
+                updateData.collectionLocation = collectionLocation;
+                // endMileage 仍然為 null，保持「待登錄里程」狀態
+                
+                // 如果用戶在 'full' 模式下也輸入了里程，則直接完成
+                if (endMileageInput) {
+                    const endMileage = parseInt(endMileageInput, 10);
+                    if (isNaN(endMileage) || endMileage < startMileage) {
+                        displayMessage(`結束里程數無效或低於起始里程 (${startMileage.toLocaleString()} Km)。`, 'error');
+                        collectionSubmitBtn.disabled = false;
+                        return;
+                    }
+                    updateData.endMileage = endMileage;
+                }
+
+            } else if (mode === 'mileage') {
+                // --- 模式 2: 登錄最終里程 (結算) ---
+                const endMileage = parseInt(endMileageInput, 10);
+                
+                if (isNaN(endMileage)) {
+                    displayMessage("請輸入有效的結束里程數。", 'error');
+                    collectionSubmitBtn.disabled = false;
+                    return;
+                }
+                if (endMileage < startMileage) {
+                     displayMessage(`收車里程 (${endMileage.toLocaleString()} Km) 不得低於交車里程 (${startMileage.toLocaleString()} Km)。`, 'error');
+                     collectionSubmitBtn.disabled = false;
+                     return;
+                }
+                
+                updateData.endMileage = endMileage;
+            }
+
+            try {
+                const docRef = doc(db, getCollectionPath(), recordId);
+                await updateDoc(docRef, updateData);
+
+                if (updateData.endMileage) {
+                     displayMessage(`收車紀錄已完成！里程差: ${(updateData.endMileage - startMileage).toLocaleString()} Km`, 'success');
+                } else {
+                     displayMessage(`收車時間/地點已記錄，待登錄最終里程。`, 'success');
+                }
+                
+                window.closeCollectionModal();
+
+            } catch (e) {
+                console.error("更新收車紀錄時發生錯誤:", e);
+                displayMessage(`儲存失敗: ${e.message}`, 'error');
+            } finally {
+                collectionSubmitBtn.disabled = false;
             }
         }
 
@@ -355,7 +533,7 @@
                 return;
             }
             
-            const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的紀錄嗎？`);
+            const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的完整週期紀錄嗎？`);
             if (!confirmation) return;
 
             try {
@@ -368,24 +546,118 @@
             }
         }
         
-        // --- 下拉選單設定邏輯 ---
+        // --- 模態視窗邏輯 ---
+        function openCollectionModal(recordId, record, mode) {
+            const modal = document.getElementById('collection-modal');
+            const modalContent = document.getElementById('collection-modal-content');
+            
+            const modalTitle = document.getElementById('modal-title');
+            const modalModeInput = document.getElementById('modal-mode');
+            const collectionSubmitBtn = document.getElementById('collection-submit-btn');
 
-        /** 設置車牌和 ETC 卡號的對應邏輯 (現在車牌選單會顯示 "車牌 (ETC)") */
-        function setupPlateEtcMapping() {
+            // 設置通用值
+            document.getElementById('modal-record-id').value = recordId;
+            document.getElementById('modal-plate-display').textContent = record.plate;
+            document.getElementById('modal-start-mileage').textContent = record.startMileage ? record.startMileage.toLocaleString() : '0';
+            modalModeInput.value = mode;
+
+            // 設置收車地點選單 (供兩種模式使用)
+            setupCollectionLocationMapping();
+
+            if (mode === 'mileage') {
+                // --- 模式 2: 僅登錄里程 ---
+                modalTitle.textContent = '登錄結束里程數 (完成結算)';
+                collectionSubmitBtn.textContent = '確認登錄並完成結算';
+                
+                document.getElementById('modal-date-container').classList.add('hidden');
+                document.getElementById('modal-time-container').classList.add('hidden');
+                document.getElementById('modal-location-container').classList.add('hidden');
+                document.getElementById('modal-mileage-container').classList.remove('col-span-2');
+                document.getElementById('modal-mileage-container').classList.add('col-span-2');
+                document.getElementById('end-mileage').required = true;
+
+                // 如果已有收車時間，則在標題下方顯示
+                
+            } else {
+                // --- 模式 1: 記錄收車時間/地點 (full) ---
+                modalTitle.textContent = '記錄收車時間與地點';
+                collectionSubmitBtn.textContent = '確認並儲存收車時間';
+
+                document.getElementById('modal-date-container').classList.remove('hidden');
+                document.getElementById('modal-time-container').classList.remove('hidden');
+                document.getElementById('modal-location-container').classList.remove('hidden');
+                document.getElementById('modal-mileage-container').classList.remove('col-span-2'); // 預設不是主要項目
+                
+                // 結束里程在初始收車階段變為非必填
+                document.getElementById('end-mileage').required = false; 
+                
+                // 預設日期和時間
+                const today = new Date().toISOString().split('T')[0];
+                const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
+                document.getElementById('collection-date').value = record.collectionDate || today;
+                document.getElementById('collection-time').value = record.collectionTime || nowTime;
+            }
+
+            // 顯示模態視窗 (使用 Tailwind 類別實現動畫效果)
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeCollectionModal() {
+            const modal = document.getElementById('collection-modal');
+            const modalContent = document.getElementById('collection-modal-content');
+            
+            // 隱藏模態視窗
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('collection-form').reset();
+            }, 300);
+        }
+        window.openCollectionModal = openCollectionModal;
+        window.closeCollectionModal = closeCollectionModal;
+        document.getElementById('collection-form').addEventListener('submit', submitCollectionUpdate);
+        
+        
+        // --- 車輛防呆邏輯 ---
+        
+        /** 獲取目前所有尚未完成結算 (endMileage === null) 的車牌 */
+        function getUnavailablePlates(records) {
+            return records
+                .filter(record => record.endMileage === null)
+                .map(record => record.plate);
+        }
+
+        /** 設置車牌和 ETC 卡號的對應邏輯 */
+        function setupPlateEtcMapping(unavailablePlates = []) {
             plateSelect.innerHTML = '<option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>'; 
             
             Object.keys(CAR_ETC_MAPPING).forEach(plateDescription => {
                 const etcId = CAR_ETC_MAPPING[plateDescription];
                 const option = document.createElement('option');
                 option.value = plateDescription; 
-                option.textContent = `${plateDescription} (${etcId})`; 
+                
+                if (unavailablePlates.includes(plateDescription)) {
+                    // 車輛已租出，禁用選項
+                    option.textContent = `${plateDescription} (已租出)`; 
+                    option.disabled = true;
+                } else {
+                    // 車輛可選
+                    option.textContent = `${plateDescription} (${etcId})`; 
+                }
+                
                 plateSelect.appendChild(option);
             });
         }
+        // --- END 車輛防呆邏輯 ---
 
-        /** 設置地點選擇器 */
+
+        /** 設置交車地點選擇器 */
         function setupLocationMapping() {
-            locationSelect.innerHTML = '<option value="" disabled selected>請選擇交車/收車地點</option>'; 
+            locationSelect.innerHTML = '<option value="" disabled selected>請選擇交車地點</option>'; 
             
             LOCATION_OPTIONS.forEach(location => {
                 const option = document.createElement('option');
@@ -395,19 +667,29 @@
             });
         }
         
+        /** 設置收車地點選擇器 */
+        function setupCollectionLocationMapping() {
+            collectionLocationSelect.innerHTML = '<option value="" disabled selected>請選擇收車地點</option>'; 
+            
+            LOCATION_OPTIONS.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location;
+                option.textContent = location;
+                collectionLocationSelect.appendChild(option);
+            });
+        }
+        
         /** 顯示/隱藏詳細資訊 */
         function toggleDetails(id) {
             const detailRow = document.getElementById(`detail-row-${id}`);
             const expandIcon = document.getElementById(`expand-icon-${id}`);
             if (detailRow) {
                 const isHidden = detailRow.classList.toggle('hidden');
-                // 切換圖標：▼ (向下箭頭，隱藏中) vs ▲ (向上箭頭，展開中)
                 if (expandIcon) {
                     expandIcon.textContent = isHidden ? '▼' : '▲';
                 }
             }
         }
-        // 將 JS 函數暴露給 HTML，以便在行內事件中使用
         window.toggleDetails = toggleDetails;
 
 
@@ -422,7 +704,6 @@
 
             noRecordsMessage.classList.add('hidden');
 
-            // 根據 sortDirection 排序
             const sortedRecords = [...records].sort((a, b) => {
                 const timeA = a.timestamp.toDate().getTime();
                 const timeB = b.timestamp.toDate().getTime();
@@ -439,42 +720,66 @@
             const filteredRecords = sortedRecords.filter(record => {
                 if (!searchTerm) return true;
                 return (
-                    record.location.toLowerCase().includes(searchTerm) ||
+                    record.deliveryLocation.toLowerCase().includes(searchTerm) ||
+                    (record.collectionLocation && record.collectionLocation.toLowerCase().includes(searchTerm)) ||
                     record.plate.toLowerCase().includes(searchTerm) ||
                     record.notes.toLowerCase().includes(searchTerm) ||
-                    record.etcId.toLowerCase().includes(searchTerm) || 
-                    record.action.toLowerCase().includes(searchTerm)
+                    (record.customerName && record.customerName.toLowerCase().includes(searchTerm)) ||
+                    (record.customerPhone && record.customerPhone.toLowerCase().includes(searchTerm)) ||
+                    record.etcId.toLowerCase().includes(searchTerm)
                 );
             });
 
 
             filteredRecords.forEach(record => {
-                const actionClass = record.action === '交車' ? 'delivery-color' : 'collection-color';
                 const recordId = record.id; 
+                const isTimeLogged = record.collectionDate !== null;
+                const isCompleted = record.endMileage !== null;
                 
-                // 1. 摘要行 (Summary Row) - 顯示簡潔資訊
+                let statusText, statusColor, actionButton, actionMode;
+
+                if (isCompleted) {
+                    statusText = '已完成';
+                    statusColor = 'bg-green-100 text-green-700';
+                    actionButton = `<span class="ml-2 px-3 py-1 text-xs font-semibold text-green-700">完成結算</span>`;
+                } else if (isTimeLogged) {
+                    statusText = '待登錄里程';
+                    statusColor = 'bg-orange-100 text-orange-700 font-bold';
+                    actionMode = 'mileage';
+                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', record, '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition duration-150">登錄里程</button>`;
+                } else {
+                    statusText = '待收車';
+                    statusColor = 'bg-yellow-100 text-yellow-700 font-bold';
+                    actionMode = 'full';
+                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', record, '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150">收車</button>`;
+                }
+
+                // 1. 摘要行 (Summary Row)
                 const summaryRow = document.createElement('tr');
                 summaryRow.className = "cursor-pointer hover:bg-gray-50 transition duration-100 border-b border-gray-200";
                 summaryRow.onclick = (e) => {
-                    // 點擊行觸發展開，但排除點擊刪除按鈕
-                    if (!e.target.closest('.delete-btn-container')) {
+                    if (!e.target.closest('.action-cell')) {
                          window.toggleDetails(recordId);
                     }
                 };
                 
                 // 渲染 4 個摘要欄位 + 1 個操作欄位
                 summaryRow.innerHTML = `
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.date}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.time}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm font-semibold">
-                        <span class="px-2 py-0.5 rounded-full text-xs ${actionClass}">${record.action}</span>
+                        <span class="px-2 py-0.5 rounded-full text-xs ${statusColor}">${statusText}</span>
                     </td>
-                    <td class="px-3 py-3 text-sm text-gray-900 min-w-[120px]">${record.location}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${record.deliveryDate} ${record.deliveryTime}</td>
+                    <td class="px-3 py-3 text-sm text-gray-900">${record.deliveryLocation}</td>
+                    <td class="px-3 py-3 text-sm text-gray-900">${record.plate.split(' ')[0]}</td>
                     
                     <!-- 展開/操作按鈕 -->
-                    <td class="px-3 py-3 whitespace-nowrap text-center">
+                    <td class="px-3 py-3 whitespace-nowrap text-center action-cell">
                         <div class="flex items-center justify-center space-x-3">
                             <span id="expand-icon-${recordId}" class="text-xl text-indigo-500 cursor-pointer">▼</span>
+                            
+                            <!-- 收車按鈕或完成標記 -->
+                            ${actionButton}
+
                             <div class="delete-btn-container">
                                 <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150">刪除</button>
                             </div>
@@ -489,27 +794,56 @@
                 detailRow.id = `detail-row-${recordId}`;
                 detailRow.className = "hidden bg-gray-100 border-b border-gray-300"; 
                 
+                // 處理客戶資訊顯示
+                const customerInfo = (record.customerName || record.customerPhone || record.customerDob) ? `
+                    <div class="space-y-1 sm:col-span-3 border-b pb-2 mb-2">
+                        <p class="font-bold text-lg text-gray-800">客戶資訊</p>
+                        <p><span class="font-medium text-gray-500">姓名:</span> ${record.customerName || '—'}</p>
+                        <p><span class="font-medium text-gray-500">電話:</span> ${record.customerPhone || '—'}</p>
+                        <p><span class="font-medium text-gray-500">生日:</span> ${record.customerDob || '—'}</p>
+                    </div>
+                ` : `<div class="sm:col-span-3 border-b pb-2 mb-2"><p class="font-bold text-lg text-gray-800">客戶資訊: 無記錄</p></div>`;
+
+
                 // 詳細資訊欄位跨越 5 欄位
                 detailRow.innerHTML = `
                     <td colspan="5" class="p-4"> 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700 p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
                             
-                            <!-- 車牌/ETC -->
-                            <div class="space-y-1">
-                                <p class="font-medium text-gray-500">車牌 (ETC 卡號)</p>
-                                <p class="font-semibold text-gray-900">${record.plate}</p>
-                                <p class="font-mono text-xs text-gray-500">${record.etcId || '—'}</p>
+                            <!-- 客戶資訊 -->
+                            ${customerInfo}
+
+                            <!-- 租賃週期概要 -->
+                            <div class="space-y-1 sm:col-span-3 border-b pb-2 mb-2">
+                                <p class="font-bold text-lg text-gray-800">車輛: ${record.plate} (${record.etcId || '—'})</p>
                             </div>
-                            
-                            <!-- 里程數 -->
-                            <div class="space-y-1">
-                                <p class="font-medium text-gray-500">里程數 (Km)</p>
-                                <p class="font-bold text-indigo-700">${record.mileage ? record.mileage.toLocaleString() + ' Km' : '—'}</p>
+
+                            <!-- 交車資訊 -->
+                            <div class="space-y-1 p-2 border rounded-lg bg-gray-50">
+                                <p class="font-bold text-green-700">交車 (Delivery)</p>
+                                <p><span class="font-medium text-gray-500">時間/地點:</span> ${record.deliveryDate} ${record.deliveryTime} / ${record.deliveryLocation}</p>
+                                <p><span class="font-medium text-gray-500">起始里程:</span> <span class="font-bold text-indigo-600">${record.startMileage ? record.startMileage.toLocaleString() : '—'} Km</span></p>
+                            </div>
+
+                            <!-- 收車資訊 -->
+                            <div class="space-y-1 p-2 border rounded-lg ${isCompleted ? 'bg-teal-50' : isTimeLogged ? 'bg-orange-50' : 'bg-red-50 sm:col-span-2'}">
+                                <p class="font-bold ${isCompleted ? 'text-teal-700' : isTimeLogged ? 'text-orange-600' : 'text-red-600'}">收車 (Collection)</p>
+                                ${isTimeLogged ? 
+                                    `<p><span class="font-medium text-gray-500">預計/實際時間:</span> ${record.collectionDate} ${record.collectionTime} / ${record.collectionLocation}</p>` :
+                                    `<p class="text-red-600 font-semibold">尚未記錄收車時間與地點。</p>`
+                                }
+                                ${isCompleted ? 
+                                     `<p><span class="font-medium text-gray-500">結束里程:</span> <span class="font-bold text-indigo-600">${record.endMileage ? record.endMileage.toLocaleString() : '—'} Km</span></p>
+                                     <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></p>` : 
+                                     (isTimeLogged ? 
+                                        `<p class="text-orange-600 font-semibold">里程待登錄，週期尚未結算。</p>` : ''
+                                     )
+                                }
                             </div>
 
                             <!-- 備註 -->
                             <div class="space-y-1 sm:col-span-3">
-                                <p class="font-medium text-gray-500">需求 / 備註</p>
+                                <p class="font-medium text-gray-500 border-t pt-2 mt-2">交車備註</p>
                                 <p class="text-gray-900 whitespace-pre-wrap">${record.notes || '無備註'}</p>
                             </div>
                         </div>
@@ -531,8 +865,15 @@
                 snapshot.forEach((doc) => {
                     records.push({ id: doc.id, ...doc.data() });
                 });
+                
                 allRecords = records; // 更新全局紀錄列表
                 renderRecords(allRecords);
+                
+                // === 防呆機制：過濾已租出的車輛 ===
+                const unavailablePlates = getUnavailablePlates(allRecords);
+                setupPlateEtcMapping(unavailablePlates);
+                // ======================================
+                
                 console.log("資料已更新:", records.length, "筆紀錄");
             }, (error) => {
                 console.error("監聽紀錄時發生錯誤:", error);
@@ -545,18 +886,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             initFirebase();
             
-            // 設置地點選擇器
+            // 設置所有地點選擇器
             setupLocationMapping();
-            
-            // 設置車牌選項和 ETC 邏輯
-            setupPlateEtcMapping();
+            setupPlateEtcMapping([]); // 初始載入時沒有已租出車輛
             
             document.getElementById('record-form').addEventListener('submit', addRecord);
             
-            // 將 JS 函數暴露給 HTML，以便在行內事件中使用 (如刪除按鈕)
             window.deleteLogRecord = deleteLogRecord; 
             
-            // 查詢輸入監聽，實時過濾
             document.getElementById('search-input').addEventListener('input', () => renderRecords(allRecords));
 
             // 排序按鈕切換
