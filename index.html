@@ -14,7 +14,6 @@
             background-color: #f7f9fb;
         }
         /* 自定義滾動條樣式，讓表格更好看 */
-        /* 在行動裝置上，我們主要使用卡片佈局，避免水平滾動 */
         .log-container::-webkit-scrollbar {
             height: 8px;
         }
@@ -28,6 +27,29 @@
         /* 交車和收車的顏色標記 */
         .delivery-color { background-color: #e0f2f1; color: #0f766e; } /* 淺青綠 */
         .collection-color { background-color: #fef3c7; color: #a16207; } /* 淺金黃 */
+        
+        /* === 專為手機 (iOS/Safari) 優化：強制列表為單行卡片式 Flex 佈局 === */
+        @media (max-width: 639px) { 
+            .mobile-list-item {
+                display: flex !important; /* 強制 TR 以 Flex 顯示 */
+                align-items: center;
+                justify-content: space-between;
+                min-height: 4rem; /* 確保足夠的點擊區域 */
+            }
+            .mobile-list-item td {
+                display: flex !important;
+                padding-top: 12px;
+                padding-bottom: 12px;
+            }
+            .mobile-list-item td:first-child {
+                flex-grow: 1; /* 摘要佔用大部分空間 */
+                align-items: center;
+            }
+            .mobile-list-item td:last-child {
+                flex-shrink: 0; /* 操作區塊緊湊 */
+                justify-content: flex-end;
+            }
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -463,8 +485,8 @@
 
                 // 1. 摘要行 (Summary Row) - 顯示簡潔資訊
                 const summaryRow = document.createElement('tr');
-                // 整個行可點擊展開詳細資訊
-                summaryRow.className = "cursor-pointer transition duration-100 hover:bg-gray-50 bg-white sm:table-row block border-b border-gray-200";
+                // 加入 mobile-list-item class 以啟用自定義 Flex 佈局
+                summaryRow.className = "cursor-pointer transition duration-100 hover:bg-gray-50 bg-white sm:table-row mobile-list-item border-b border-gray-200";
                 summaryRow.onclick = (e) => {
                     // Prevent toggle if the click target is the delete button or its container
                     if (!e.target.closest('.delete-btn-container')) {
@@ -474,20 +496,19 @@
                 
                 // --- 簡潔顯示，合併成一列 ---
                 summaryRow.innerHTML = `
-                    <!-- 1. 紀錄摘要 (合併日期、時間和動作) -->
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 block sm:table-cell font-medium">
+                    <!-- 1. 紀錄摘要 (佔滿空間) -->
+                    <td class="px-3 py-3 text-sm text-gray-900 sm:table-cell font-medium">
                         <div class="flex items-center space-x-2">
                             <!-- 顯示：日期 時間 動作 (用小圓角標籤) -->
-                            <span class="font-bold text-base">${record.date} ${record.time}</span>
-                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${actionClass}">${record.action}</span>
+                            <span class="font-bold text-base whitespace-nowrap">${record.date} ${record.time}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${actionClass} whitespace-nowrap">${record.action}</span>
                         </div>
-                        <!-- 手機版提示，讓使用者知道可以點擊展開 -->
-                        <span class="sm:hidden text-xs text-gray-400 mt-1 block">點擊查看詳細資訊...</span>
+                        <!-- 手機版提示，現在由自定義 CSS 隱藏，不影響桌面 flex-grow -->
                     </td>
                     
-                    <!-- 2. 詳細資訊/操作 -->
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium block sm:table-cell text-right sm:text-left">
-                        <div class="flex items-center justify-end sm:justify-start space-x-4">
+                    <!-- 2. 詳細資訊/操作 (固定寬度) -->
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium sm:table-cell text-right sm:text-left">
+                        <div class="flex items-center justify-end space-x-4">
                             <!-- 展開指示器 (Mobile & Desktop) -->
                             <span id="expand-icon-${recordId}" class="text-xl text-indigo-500 sm:text-base">▼</span>
                             
@@ -496,7 +517,6 @@
                                 <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 disabled:text-gray-400">刪除</button>
                             </div>
                         </div>
-                        <!-- 桌面版提示 (移除，因為點擊行為已改變，由展開指示器代表) -->
                     </td>
                 `;
                 recordsTableBody.appendChild(summaryRow);
