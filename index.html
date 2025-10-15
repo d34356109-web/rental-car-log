@@ -24,14 +24,17 @@
         .log-container::-webkit-scrollbar-track {
             background: #f1f5f9;
         }
-        /* 交車和收車的顏色標記 */
-        .delivery-color { background-color: #e0f2f1; color: #0f766e; } /* 淺青綠 */
-        .collection-color { background-color: #fef3c7; color: #a16207; } /* 淺金黃 */
         /* 模態視窗背景 */
         .modal-backdrop {
             background-color: rgba(0, 0, 0, 0.5);
         }
     </style>
+    
+    <!-- PWA / 行動裝置 App 介面設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body class="p-4 md:p-8">
 
@@ -41,6 +44,12 @@
             <h1 class="3xl font-bold text-gray-800 mb-2">租車交車紀錄控管中心</h1>
             <p class="text-gray-500">使用 Firestore 儲存紀錄，資料即時同步。當前使用者 ID: <span id="user-id-display" class="font-mono text-xs bg-gray-100 p-1 rounded">載入中...</span></p>
         </header>
+
+        <!-- 當前日期與排程提示 (New) -->
+        <div class="mb-4 p-4 bg-indigo-50 border-l-4 border-indigo-600 rounded-lg shadow-md">
+            <p class="text-sm font-semibold text-indigo-700">📆 今日日期: <span id="current-date-display" class="font-mono"></span></p>
+            <p class="text-xs text-indigo-600 mt-1">💡 行程提示: 確認是否有 **今日收車** 或 **明日交車** 排程。</p>
+        </div>
 
         <!-- 訊息/載入指示器 -->
         <div id="message-box" class="mb-6 p-3 rounded-lg text-sm transition-all duration-300 hidden"></div>
@@ -88,7 +97,7 @@
                     <textarea id="record-notes" rows="2" placeholder="例如: 兩張兒童座椅(2歲跟5歲)；車型: Toyota 40系" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                 </div>
                 
-                <!-- 客戶資料區塊 - 已移動至備註下方 -->
+                <!-- 客戶資料區塊 -->
                 <div class="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 mt-4">
                     <div class="sm:col-span-3 text-sm font-semibold text-gray-700 border-b pb-2 mb-2">客戶資料 (選填)</div>
                     <div>
@@ -193,6 +202,107 @@
             </form>
         </div>
     </div>
+    
+    <!-- 編輯模態視窗 (Edit Modal - New) -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0" id="edit-modal-content">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">編輯租賃週期紀錄</h3>
+            
+            <form id="edit-form">
+                <input type="hidden" id="edit-record-id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                    <!-- 左側：交車資訊 (Delivery) -->
+                    <div class="p-4 border rounded-lg bg-indigo-50 space-y-3">
+                        <h4 class="font-bold text-lg text-indigo-700 border-b pb-2 mb-3">交車資訊 (Delivery)</h4>
+                        
+                        <div>
+                            <label for="edit-plate" class="block text-sm font-medium text-gray-700">車牌 (不可修改)</label>
+                            <input type="text" id="edit-plate" readonly class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 bg-gray-200 text-gray-600">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-delivery-date" class="block text-sm font-medium text-gray-700">交車日期</label>
+                            <input type="date" id="edit-delivery-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-delivery-time" class="block text-sm font-medium text-gray-700">交車時間</label>
+                            <input type="time" id="edit-delivery-time" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-delivery-location" class="block text-sm font-medium text-gray-700">交車地點</label>
+                            <select id="edit-delivery-location" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border"></select>
+                        </div>
+                        
+                        <div>
+                            <label for="edit-start-mileage" class="block text-sm font-medium text-gray-700">起始里程數 (Km)</label>
+                            <input type="number" id="edit-start-mileage" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                    </div>
+
+                    <!-- 中間：收車資訊 (Collection) -->
+                    <div class="p-4 border rounded-lg bg-yellow-50 space-y-3">
+                        <h4 class="font-bold text-lg text-yellow-700 border-b pb-2 mb-3">收車資訊 (Collection)</h4>
+                        
+                        <div>
+                            <label for="edit-collection-date" class="block text-sm font-medium text-gray-700">收車日期</label>
+                            <input type="date" id="edit-collection-date" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-collection-time" class="block text-sm font-medium text-gray-700">收車時間</label>
+                            <input type="time" id="edit-collection-time" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-collection-location" class="block text-sm font-medium text-gray-700">收車地點</label>
+                            <select id="edit-collection-location" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border"></select>
+                        </div>
+                        
+                        <div>
+                            <label for="edit-end-mileage" class="block text-sm font-medium text-gray-700">結束里程數 (Km)</label>
+                            <input type="number" id="edit-end-mileage" placeholder="待登錄則留空" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                    </div>
+                    
+                    <!-- 右側：客戶與備註 -->
+                    <div class="p-4 border rounded-lg bg-gray-50 space-y-3">
+                        <h4 class="font-bold text-lg text-gray-700 border-b pb-2 mb-3">客戶資訊與備註</h4>
+                        
+                        <div>
+                            <label for="edit-customer-name" class="block text-sm font-medium text-gray-700">客戶姓名</label>
+                            <input type="text" id="edit-customer-name" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-customer-phone" class="block text-sm font-medium text-gray-700">聯絡電話</label>
+                            <input type="tel" id="edit-customer-phone" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+
+                        <div>
+                            <label for="edit-customer-dob" class="block text-sm font-medium text-gray-700">出生年月日</label>
+                            <input type="date" id="edit-customer-dob" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        
+                        <div>
+                            <label for="edit-notes" class="block text-sm font-medium text-gray-700">需求 / 備註</label>
+                            <textarea id="edit-notes" rows="3" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="window.closeEditModal()" class="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150" id="edit-submit-btn">
+                        確認修改並儲存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
 
     <!-- Firebase SDKs -->
@@ -262,6 +372,21 @@
         const customerNameInput = document.getElementById('customer-name');
         const customerPhoneInput = document.getElementById('customer-phone');
         const customerDobInput = document.getElementById('customer-dob');
+        
+        // 編輯模態視窗元素
+        const editPlateInput = document.getElementById('edit-plate');
+        const editDeliveryDateInput = document.getElementById('edit-delivery-date');
+        const editDeliveryTimeInput = document.getElementById('edit-delivery-time');
+        const editDeliveryLocationSelect = document.getElementById('edit-delivery-location');
+        const editStartMileageInput = document.getElementById('edit-start-mileage');
+        const editCollectionDateInput = document.getElementById('edit-collection-date');
+        const editCollectionTimeInput = document.getElementById('edit-collection-time');
+        const editCollectionLocationSelect = document.getElementById('edit-collection-location');
+        const editEndMileageInput = document.getElementById('edit-end-mileage');
+        const editCustomerNameInput = document.getElementById('edit-customer-name');
+        const editCustomerPhoneInput = document.getElementById('edit-customer-phone');
+        const editCustomerDobInput = document.getElementById('edit-customer-dob');
+        const editNotesInput = document.getElementById('edit-notes');
 
 
         /** 顯示應用程式訊息 */
@@ -457,8 +582,8 @@
             const collectionSubmitBtn = document.getElementById('collection-submit-btn');
 
             // 取得起始里程 (用於里程檢查)
-            const startMileageText = document.getElementById('modal-start-mileage').textContent.replace(/,/g, '').split(' ')[0]; // 移除千位分隔符和 "Km"
-            const startMileage = parseInt(startMileageText, 10);
+            const record = allRecords.find(r => r.id === recordId);
+            const startMileage = record ? record.startMileage : 0;
             
             collectionSubmitBtn.disabled = true;
 
@@ -547,11 +672,8 @@
         
         // --- 模態視窗邏輯 ---
         function openCollectionModal(recordId, mode) {
-            console.log(`Attempting to open modal for Record ID: ${recordId}, Mode: ${mode}`); // 診斷日誌
-            // Debug Fix: Retrieve the record object from the global array using the ID
             const record = allRecords.find(r => r.id === recordId);
             if (!record) {
-                console.error(`ERROR: Record ID ${recordId} not found in allRecords array. Data might be stale.`);
                 displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
                 return;
             }
@@ -561,7 +683,6 @@
             
             const modalTitle = document.getElementById('modal-title');
             const modalModeInput = document.getElementById('modal-mode');
-            const collectionSubmitBtn = document.getElementById('collection-submit-btn');
 
             // 設置通用值
             document.getElementById('modal-record-id').value = recordId;
@@ -570,12 +691,15 @@
             modalModeInput.value = mode;
 
             // 設置收車地點選單 (供兩種模式使用)
-            setupCollectionLocationMapping();
+            setupCollectionLocationMapping(record.collectionLocation);
 
+            // 清除上次的輸入值
+            document.getElementById('end-mileage').value = ''; 
+            
             if (mode === 'mileage') {
                 // --- 模式 2: 僅登錄里程 ---
                 modalTitle.textContent = '登錄結束里程數 (完成結算)';
-                collectionSubmitBtn.textContent = '確認登錄並完成結算';
+                document.getElementById('collection-submit-btn').textContent = '確認登錄並完成結算';
                 
                 document.getElementById('modal-date-container').classList.add('hidden');
                 document.getElementById('modal-time-container').classList.add('hidden');
@@ -583,20 +707,17 @@
                 document.getElementById('modal-mileage-container').classList.remove('col-span-2');
                 document.getElementById('modal-mileage-container').classList.add('col-span-2');
                 document.getElementById('end-mileage').required = true;
-
-                // 如果已有收車時間，則在標題下方顯示
                 
             } else {
                 // --- 模式 1: 記錄收車時間/地點 (full) ---
                 modalTitle.textContent = '記錄收車時間與地點';
-                collectionSubmitBtn.textContent = '確認並儲存收車時間';
+                document.getElementById('collection-submit-btn').textContent = '確認並儲存收車時間';
 
                 document.getElementById('modal-date-container').classList.remove('hidden');
                 document.getElementById('modal-time-container').classList.remove('hidden');
                 document.getElementById('modal-location-container').classList.remove('hidden');
-                document.getElementById('modal-mileage-container').classList.remove('col-span-2'); // 預設不是主要項目
+                document.getElementById('modal-mileage-container').classList.remove('col-span-2'); 
                 
-                // 結束里程在初始收車階段變為非必填
                 document.getElementById('end-mileage').required = false; 
                 
                 // 預設日期和時間
@@ -604,9 +725,10 @@
                 const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
                 document.getElementById('collection-date').value = record.collectionDate || today;
                 document.getElementById('collection-time').value = record.collectionTime || nowTime;
+                
             }
 
-            // 顯示模態視窗 (使用 Tailwind 類別實現動畫效果)
+            // 顯示模態視窗
             modal.classList.remove('hidden');
             setTimeout(() => {
                 modalContent.classList.remove('scale-95', 'opacity-0');
@@ -629,6 +751,158 @@
         window.closeCollectionModal = closeCollectionModal;
         document.getElementById('collection-form').addEventListener('submit', submitCollectionUpdate);
         
+        // --- 編輯模態視窗邏輯 (New) ---
+
+        function openEditModal(recordId) {
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) {
+                displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
+                return;
+            }
+
+            // 1. 設置 ID
+            document.getElementById('edit-record-id').value = recordId;
+
+            // 2. 設置交車資訊
+            editPlateInput.value = record.plate; // 車牌不可編輯
+            editDeliveryDateInput.value = record.deliveryDate;
+            editDeliveryTimeInput.value = record.deliveryTime;
+            editStartMileageInput.value = record.startMileage;
+            editNotesInput.value = record.notes || '';
+            
+            // 設置交車地點選單 (並預選值)
+            setupEditLocationMapping(editDeliveryLocationSelect, record.deliveryLocation);
+
+            // 3. 設置收車資訊
+            editCollectionDateInput.value = record.collectionDate || '';
+            editCollectionTimeInput.value = record.collectionTime || '';
+            editEndMileageInput.value = record.endMileage || '';
+            
+            // 設置收車地點選單 (並預選值)
+            setupEditLocationMapping(editCollectionLocationSelect, record.collectionLocation);
+            
+            // 4. 設置客戶資訊
+            editCustomerNameInput.value = record.customerName || '';
+            editCustomerPhoneInput.value = record.customerPhone || '';
+            editCustomerDobInput.value = record.customerDob || '';
+            
+            // 顯示模態視窗
+            const modal = document.getElementById('edit-modal');
+            const modalContent = document.getElementById('edit-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        async function submitEditUpdate(event) {
+            event.preventDefault();
+            if (!db || !userId) {
+                displayMessage("資料庫連線或用戶認證失敗，無法儲存修改。", 'error');
+                return;
+            }
+            
+            const recordId = document.getElementById('edit-record-id').value;
+            const originalRecord = allRecords.find(r => r.id === recordId);
+            const editSubmitBtn = document.getElementById('edit-submit-btn');
+
+            if (!originalRecord) {
+                displayMessage("找不到原始紀錄，無法修改。", 'error');
+                return;
+            }
+
+            editSubmitBtn.disabled = true;
+            
+            const startMileage = parseInt(editStartMileageInput.value, 10);
+            const endMileage = editEndMileageInput.value ? parseInt(editEndMileageInput.value, 10) : null;
+            
+            // --- 里程數防呆檢查 ---
+            if (endMileage !== null && endMileage < startMileage) {
+                displayMessage(`錯誤: 結束里程 (${endMileage.toLocaleString()} Km) 不得低於起始里程 (${startMileage.toLocaleString()} Km)。`, 'error');
+                editSubmitBtn.disabled = false;
+                return;
+            }
+            
+            // 準備更新數據
+            const updateData = {
+                // 交車資訊 (Delivery) - 可編輯
+                deliveryDate: editDeliveryDateInput.value,
+                deliveryTime: editDeliveryTimeInput.value,
+                deliveryLocation: editDeliveryLocationSelect.value,
+                startMileage: startMileage,
+                notes: editNotesInput.value || '',
+
+                // 收車資訊 (Collection) - 可編輯
+                collectionDate: editCollectionDateInput.value || null,
+                collectionTime: editCollectionTimeInput.value || null,
+                collectionLocation: editCollectionLocationSelect.value || null,
+                endMileage: endMileage,
+
+                // 客戶資訊 - 可編輯
+                customerName: editCustomerNameInput.value || null,
+                customerPhone: editCustomerPhoneInput.value || null,
+                customerDob: editCustomerDobInput.value || null,
+                
+                // 保持原有的 timestamp 用於排序
+                timestamp: originalRecord.timestamp 
+            };
+            
+            // 檢查是否影響防呆機制 (只有在修改交車或收車狀態時才檢查)
+            const oldPlate = originalRecord.plate;
+            const newStartMileage = updateData.startMileage;
+            const newEndMileage = updateData.endMileage;
+
+            // 如果交車里程被清空或不合法
+            if (isNaN(newStartMileage)) {
+                displayMessage("起始里程必須是有效數字。", 'error');
+                editSubmitBtn.disabled = false;
+                return;
+            }
+
+            // 如果紀錄從已完成變為待收車，則需要檢查車輛是否會與其他紀錄衝突
+            const wasCompleted = originalRecord.endMileage !== null;
+            const isNowCompleted = newEndMileage !== null;
+            
+            if (wasCompleted && !isNowCompleted) {
+                // 檢查是否有其他紀錄現在佔用了這輛車
+                const currentlyUnavailable = getUnavailablePlates(allRecords.filter(r => r.id !== recordId));
+                if (currentlyUnavailable.includes(oldPlate)) {
+                    displayMessage(`錯誤: 此車牌 (${oldPlate}) 在其他週期中已被租出，無法將本紀錄設為「待收車」。`, 'error');
+                    editSubmitBtn.disabled = false;
+                    return;
+                }
+            }
+
+
+            try {
+                const docRef = doc(db, getCollectionPath(), recordId);
+                await updateDoc(docRef, updateData);
+                displayMessage("紀錄修改成功！", 'success');
+                window.closeEditModal();
+            } catch (e) {
+                console.error("更新文件時發生錯誤:", e);
+                displayMessage(`修改失敗: ${e.message}`, 'error');
+            } finally {
+                editSubmitBtn.disabled = false;
+            }
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            const modalContent = document.getElementById('edit-modal-content');
+            
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+        window.openEditModal = openEditModal;
+        window.closeEditModal = closeEditModal;
+        document.getElementById('edit-form').addEventListener('submit', submitEditUpdate);
+        // --- END 編輯模態視窗邏輯 ---
+
+
         
         // --- 車輛防呆邏輯 ---
         
@@ -663,30 +937,41 @@
         // --- END 車輛防呆邏輯 ---
 
 
-        /** 設置交車地點選擇器 */
-        function setupLocationMapping() {
-            locationSelect.innerHTML = '<option value="" disabled selected>請選擇交車地點</option>'; 
+        /** 設置地點選擇器 */
+        function setupLocationMapping(selectElement, selectedValue = '') {
+            selectElement.innerHTML = `<option value="" disabled ${!selectedValue ? 'selected' : ''}>請選擇地點</option>`; 
             
             LOCATION_OPTIONS.forEach(location => {
                 const option = document.createElement('option');
                 option.value = location;
                 option.textContent = location;
-                locationSelect.appendChild(option);
+                if (location === selectedValue) {
+                    option.selected = true;
+                }
+                selectElement.appendChild(option);
             });
         }
         
-        /** 設置收車地點選擇器 */
-        function setupCollectionLocationMapping() {
-            collectionLocationSelect.innerHTML = '<option value="" disabled selected>請選擇收車地點</option>'; 
+        /** 設置編輯模態視窗的地點選擇器 (通用) */
+        function setupEditLocationMapping(selectElement, selectedValue = '') {
+            selectElement.innerHTML = `<option value="">無</option>`; // 編輯時允許清空
             
             LOCATION_OPTIONS.forEach(location => {
                 const option = document.createElement('option');
                 option.value = location;
                 option.textContent = location;
-                collectionLocationSelect.appendChild(option);
+                if (location === selectedValue) {
+                    option.selected = true;
+                }
+                selectElement.appendChild(option);
             });
         }
         
+        // 為了兼容舊的收車模態視窗，保留此函式
+        function setupCollectionLocationMapping(selectedValue = '') {
+             setupEditLocationMapping(collectionLocationSelect, selectedValue);
+        }
+
         /** 顯示/隱藏詳細資訊 */
         function toggleDetails(id) {
             const detailRow = document.getElementById(`detail-row-${id}`);
@@ -781,9 +1066,12 @@
                     
                     <!-- 展開/操作按鈕 -->
                     <td class="px-3 py-3 whitespace-nowrap text-center action-cell">
-                        <div class="flex items-center justify-center space-x-3">
+                        <div class="flex items-center justify-center space-x-2">
                             <span id="expand-icon-${recordId}" class="text-xl text-indigo-500 cursor-pointer">▼</span>
                             
+                            <!-- 編輯按鈕 (New Addition) -->
+                            <button onclick="window.openEditModal('${recordId}')" class="px-2 py-1 text-xs font-semibold text-gray-700 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition duration-150">編輯</button>
+
                             <!-- 收車按鈕或完成標記 -->
                             ${actionButton}
 
@@ -894,7 +1182,7 @@
             initFirebase();
             
             // 設置所有地點選擇器
-            setupLocationMapping();
+            setupLocationMapping(locationSelect);
             setupPlateEtcMapping([]); // 初始載入時沒有已租出車輛
             
             document.getElementById('record-form').addEventListener('submit', addRecord);
@@ -914,6 +1202,12 @@
             // 初始化日期輸入框為今天
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('record-date').value = today;
+            
+            // 初始化當前日期顯示 (New)
+            const currentDateDisplay = document.getElementById('current-date-display');
+            currentDateDisplay.textContent = new Date().toLocaleDateString('zh-TW', {
+                year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
+            });
         });
 
     </script>
