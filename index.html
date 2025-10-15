@@ -48,7 +48,7 @@
         <!-- 當前日期與排程提示 (New) -->
         <div class="mb-4 p-4 bg-indigo-50 border-l-4 border-indigo-600 rounded-lg shadow-md">
             <p class="text-sm font-semibold text-indigo-700">📆 今日日期: <span id="current-date-display" class="font-mono"></span></p>
-            <p class="text-xs text-indigo-600 mt-1">💡 行程提示: 確認是否有 **今日收車** 或 **明日交車** 排程。</p>
+            <p class="text-xs text-indigo-600 mt-1">💡 行程提示: <span id="schedule-tip">載入中...</span></p>
         </div>
 
         <!-- 訊息/載入指示器 -->
@@ -159,7 +159,7 @@
 
     <!-- 收車模態視窗 (Collection Modal) -->
     <div id="collection-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0" id="collection-modal-content">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh] overflow-y-auto" id="collection-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4" id="modal-title"></h3>
             
             <p class="text-sm text-gray-600 mb-4">正在為 <span id="modal-plate-display" class="font-bold text-indigo-600"></span> 記錄資訊。</p>
@@ -205,7 +205,7 @@
     
     <!-- 編輯模態視窗 (Edit Modal - New) -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0" id="edit-modal-content">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh] overflow-y-auto" id="edit-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">編輯租賃週期紀錄</h3>
             
             <form id="edit-form">
@@ -413,6 +413,15 @@
             }, 5000);
         }
 
+        /** 格式化日期為 YYYY-MM-DD 格式 */
+        function getFormattedDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+
         // --- Firebase 初始化和認證 ---
         function initFirebase() {
             const submitButton = document.getElementById('submit-button'); // 取得按鈕元素
@@ -553,7 +562,7 @@
                 await addDoc(collectionRef, newRecord);
                 displayMessage("交車紀錄儲存成功！週期已開啟。", 'success');
                 document.getElementById('record-form').reset();
-                setupLocationMapping(); // 重設地點下拉選單
+                setupLocationMapping(locationSelect); // 重設地點下拉選單
             } catch (e) {
                 console.error("新增文件時發生錯誤:", e);
                 displayMessage(`儲存失敗: ${e.message}`, 'error');
@@ -984,6 +993,48 @@
             }
         }
         window.toggleDetails = toggleDetails;
+        
+        /** 更新行程提示 (New) */
+        function updateScheduleTip() {
+            const today = new Date();
+            const tomorrow = new Date();
+            tomorrow.setDate(today.getDate() + 1);
+
+            const todayStr = getFormattedDate(today);
+            const tomorrowStr = getFormattedDate(tomorrow);
+
+            // 1. 今日收車: collectionDate = today 且 endMileage = null
+            const todayCollections = allRecords.filter(record => 
+                record.collectionDate === todayStr && record.endMileage === null
+            );
+
+            // 2. 明日交車: deliveryDate = tomorrow
+            const tomorrowDeliveries = allRecords.filter(record => 
+                record.deliveryDate === tomorrowStr
+            );
+
+            let tipParts = [];
+
+            if (todayCollections.length > 0) {
+                const plates = todayCollections.map(r => r.plate.split(' ')[0]).join(', ');
+                tipParts.push(`今天有 **${todayCollections.length}** 筆收車排程: ${plates}。`);
+            }
+
+            if (tomorrowDeliveries.length > 0) {
+                const plates = tomorrowDeliveries.map(r => r.plate.split(' ')[0]).join(', ');
+                tipParts.push(`明天有 **${tomorrowDeliveries.length}** 筆交車排程: ${plates}。`);
+            }
+            
+            const tipElement = document.getElementById('schedule-tip'); 
+            
+            if (tipParts.length === 0) {
+                tipElement.innerHTML = `無當前重要排程提示。`;
+                tipElement.classList.remove('font-bold');
+            } else {
+                tipElement.innerHTML = tipParts.join(' ');
+                tipElement.classList.add('font-bold');
+            }
+        }
 
 
         /** 渲染紀錄列表 (點擊展開模式) */
@@ -992,6 +1043,7 @@
             
             if (records.length === 0) {
                 noRecordsMessage.classList.remove('hidden');
+                updateScheduleTip(); // 確保無紀錄時提示也能更新
                 return;
             }
 
@@ -1168,6 +1220,8 @@
                 const unavailablePlates = getUnavailablePlates(allRecords);
                 setupPlateEtcMapping(unavailablePlates);
                 // ======================================
+                
+                updateScheduleTip(); // <-- Call the new function here
                 
                 console.log("資料已更新:", records.length, "筆紀錄");
             }, (error) => {
