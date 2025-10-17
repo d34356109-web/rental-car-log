@@ -38,6 +38,53 @@
             word-break: break-all;
             /* 允許長字串在不破壞佈局的情況下換行 */
         }
+        /* 日曆格子樣式 */
+        .calendar-day {
+            min-height: 80px;
+            padding-top: 24px; /* 留給日期數字的空間 */
+            cursor: pointer;
+            transition: background-color 0.15s;
+            position: relative;
+        }
+        .calendar-day:hover {
+            background-color: #f3f4f6;
+        }
+        /* 日期數字的絕對定位 */
+        .day-number {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 600; /* semi-bold */
+        }
+
+        /* ------------------------------------------- */
+        /* 新增：日曆排程長條樣式 */
+        /* ------------------------------------------- */
+        .calendar-grid-container {
+            position: relative;
+        }
+        .event-bar {
+            position: absolute;
+            height: 20px; /* 長條高度 */
+            border-radius: 4px;
+            padding: 0 4px;
+            color: white;
+            font-size: 0.75rem; /* text-xs */
+            font-weight: 500;
+            cursor: pointer;
+            z-index: 10;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: transform 0.1s;
+            pointer-events: auto; /* 確保可以點擊 */
+        }
+        .event-bar:hover {
+            transform: scale(1.02);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        /* 移除 bg-event-default，改為動態顏色 */
+        
     </style>
     
     <!-- PWA / 行動裝置 App 介面設定 -->
@@ -54,6 +101,41 @@
             <h1 class="3xl font-bold text-gray-800 mb-2">租車交車紀錄控管中心</h1>
             <p class="text-gray-500">使用 Firestore 儲存紀錄，資料即時同步。當前使用者 ID: <span id="user-id-display" class="font-mono text-xs bg-gray-100 p-1 rounded">載入中...</span></p>
         </header>
+        
+        <!-- 日曆展開按鈕 -->
+        <button id="toggle-calendar" class="mb-4 px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition duration-150 w-full md:w-auto flex items-center justify-center">
+            📅 查看日曆
+        </button>
+
+        <!-- 日曆容器 (預設隱藏) -->
+        <div id="calendar-container" class="bg-white p-4 rounded-xl shadow-xl mb-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <button id="prev-month" class="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
+                    <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h3 id="current-month-year" class="text-xl font-bold text-gray-800"></h3>
+                <button id="next-month" class="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
+                    <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-center font-semibold text-sm text-gray-600 border-b pb-2">
+                <div>日</div>
+                <div>一</div>
+                <div>二</div>
+                <div>三</div>
+                <div>四</div>
+                <div>五</div>
+                <div>六</div>
+            </div>
+            <div id="calendar-grid-container" class="calendar-grid-container">
+                 <div id="calendar-grid" class="grid grid-cols-7 gap-1">
+                    <!-- 日期將在此處生成 -->
+                 </div>
+                 <div id="calendar-events-overlay" class="absolute inset-0 grid grid-cols-7 gap-1 pointer-events-none">
+                    <!-- 事件長條將在此處生成 -->
+                 </div>
+            </div>
+        </div>
 
         <!-- 當前日期與排程提示 (New) -->
         <div class="mb-4 p-4 bg-indigo-50 border-l-4 border-indigo-600 rounded-lg shadow-md">
@@ -313,10 +395,14 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
+        // IIFE Start: Wrap the initialization logic to prevent global scope conflicts
+        
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        (function() { 
+        
         // 設定 Firebase Debug Log
         setLogLevel('Debug');
 
@@ -355,6 +441,21 @@
             "東京"
         ]; 
         // =================================================================
+        
+        // === 顏色定義 (New) ===
+        const PLATE_COLORS = [
+            '#ef4444', // Red 500
+            '#f97316', // Orange 500
+            '#eab308', // Yellow 500
+            '#22c55e', // Green 500
+            '#06b6d4', // Cyan 500
+            '#3b82f6', // Blue 500
+            '#6366f1', // Indigo 500
+            '#a855f7', // Violet 500
+            '#ec4899', // Pink 500
+        ];
+        // === 顏色定義結束 ===
+
 
         let app;
         let db;
@@ -363,6 +464,8 @@
         let isAuthReady = false;
         let allRecords = []; // 儲存從 Firestore 獲取的所有紀錄
         let sortDirection = 'desc'; // 'desc' (新到舊) 或 'asc' (舊到新)
+        
+        let currentCalendarDate = new Date(); // New: 用於日曆顯示
 
         const messageBox = document.getElementById('message-box');
         const recordsListContainer = document.getElementById('records-list-container'); // 變更名稱為 List Container
@@ -374,6 +477,14 @@
         // 地點元素現在是 Input (透過 list 屬性連接 datalist)
         const locationSelect = document.getElementById('record-location'); 
         const collectionLocationSelect = document.getElementById('collection-location'); 
+        
+        // 日曆元素
+        const calendarContainer = document.getElementById('calendar-container');
+        const currentMonthYear = document.getElementById('current-month-year');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const toggleCalendarButton = document.getElementById('toggle-calendar');
+        const calendarEventsOverlay = document.getElementById('calendar-events-overlay'); // New Overlay
+
         
         // 新增的客戶資料輸入欄位
         const customerNameInput = document.getElementById('customer-name');
@@ -1087,27 +1198,27 @@
             const getDisplayDate = (dateStr) => dateStr.substring(5).replace('-', '/');
 
 
-            // 1. 今日收車: collectionDate = today 且 endMileage = null
+            // 1. 今日收車: collectionDate = today 這個邏輯是對的，但為了日曆的週期完整性，這裡只處理提示
             const todayCollections = allRecords.filter(record => 
                 record.collectionDate === todayStr && record.endMileage === null
             );
 
-            // 2. 明日收車: collectionDate = tomorrow 且 endMileage = null
+            // 2. 明日收車
             const tomorrowCollections = allRecords.filter(record => 
                 record.collectionDate === tomorrowStr && record.endMileage === null
             );
 
-            // 3. 明日交車: deliveryDate = tomorrow
+            // 3. 明日交車
             const tomorrowDeliveries = allRecords.filter(record => 
                 record.deliveryDate === tomorrowStr
             );
             
-            // 4. 後天收車: collectionDate = D+2 且 endMileage = null (New)
+            // 4. 後天收車
             const dayAfterTomorrowCollections = allRecords.filter(record => 
                 record.collectionDate === dayAfterTomorrowStr && record.endMileage === null
             );
 
-            // 5. 後天交車: deliveryDate = D+2 (New)
+            // 5. 後天交車
             const dayAfterTomorrowDeliveries = allRecords.filter(record => 
                 record.deliveryDate === dayAfterTomorrowStr
             );
@@ -1177,6 +1288,9 @@
 
                 tipElement.innerHTML = listHTML;
             }
+            
+            // 每次更新完提示後，重新渲染日曆 (New)
+            renderCalendar();
         }
 
 
@@ -1205,8 +1319,11 @@
 
             // 執行查詢過濾
             const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+            
+            // 修正邏輯：只有在 searchTerm 不為空時才執行過濾
             const filteredRecords = sortedRecords.filter(record => {
-                if (!searchTerm) return true;
+                if (!searchTerm) return true; // 如果沒有搜尋詞，顯示所有紀錄
+                
                 return (
                     record.deliveryLocation.toLowerCase().includes(searchTerm) ||
                     (record.collectionLocation && record.collectionLocation.toLowerCase().includes(searchTerm)) ||
@@ -1400,7 +1517,9 @@
                 });
                 
                 allRecords = records; // 更新全局紀錄列表
-                renderRecords(allRecords);
+                
+                // DEBUG: 這裡不需要額外的 console.log，renderRecords 已經有 console.log 了
+                renderRecords(allRecords); // 渲染列表
                 
                 // === 防呆機制：過濾已租出的車輛 (使用當前表單時間) ===
                 const date = document.getElementById('record-date').value;
@@ -1413,14 +1532,250 @@
                 setupPlateEtcMapping(unavailablePlates);
                 // ======================================
                 
-                updateScheduleTip(); // <-- Call the new function here
+                updateScheduleTip(); // <-- Call the new function here, which also calls renderCalendar
                 
-                console.log("資料已更新:", records.length, "筆紀錄");
+                // !!! 新增除錯紀錄: 顯示讀取到的紀錄數量 !!!
+                console.log("資料已更新 (Firestore 讀取數量):", records.length, "筆紀錄");
             }, (error) => {
                 console.error("監聽紀錄時發生錯誤:", error);
                 displayMessage("載入紀錄失敗，請檢查權限。", 'error');
             });
         }
+        
+        // --- 日曆邏輯 (New) ---
+
+        // 輔助函式：取得 date string 的日期部分
+        function getDate(dateStr) {
+            return new Date(dateStr + "T00:00:00");
+        }
+
+        // 輔助函式：計算兩個日期之間的天數
+        function getDaysBetween(date1, date2) {
+            const diffTime = Math.abs(getDate(date2).getTime() - getDate(date1).getTime());
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 包含頭尾兩天
+        }
+        
+        // 輔助函式：計算車牌的顏色索引 (New)
+        function getPlateColor(plate) {
+            let hash = 0;
+            for (let i = 0; i < plate.length; i++) {
+                hash = plate.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % PLATE_COLORS.length;
+            return PLATE_COLORS[index];
+        }
+
+        // 渲染日曆排程長條 (新的核心邏輯)
+        function renderEventsOverlay(records) {
+            const overlay = document.getElementById('calendar-events-overlay');
+            const grid = document.getElementById('calendar-grid');
+            overlay.innerHTML = '';
+            
+            if (grid.children.length === 0) return; // 避免在日曆還沒渲染時運行
+
+            const currentMonthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
+            const currentMonthEnd = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 0);
+            
+            // 過濾出所有有明確排程的週期 (無論是否完成結算，只要有 collectionDate/Time 就視為排程)
+            const visibleCycles = records.filter(r => 
+                r.collectionDate && r.collectionTime && r.deliveryDate && r.deliveryTime
+            );
+            
+            // 建立一個追蹤器，用來安排事件在不同「軌道」（垂直位置）上，避免重疊
+            const trackOccupancy = []; // 每個元素代表一個星期，值為該星期的已佔用軌道數
+
+            visibleCycles.forEach(record => {
+                const deliveryDate = getDate(record.deliveryDate);
+                const collectionDate = getDate(record.collectionDate);
+                const isCompleted = record.endMileage !== null; // 判斷是否已完成結算
+                
+                // 限制事件只在當前月份內顯示
+                const cycleStart = new Date(Math.max(deliveryDate.getTime(), currentMonthStart.getTime()));
+                const cycleEnd = new Date(Math.min(collectionDate.getTime(), currentMonthEnd.getTime()));
+                
+                // 只有在週期開始日早於結束日（且在當月內）才繪製
+                if (cycleStart.getTime() > cycleEnd.getTime() && cycleEnd.getMonth() === currentCalendarDate.getMonth()) {
+                     return; 
+                }
+                
+                // --- 取得簡短車牌顯示 ---
+                const shortPlateDisplay = getShortPlateDisplay(record.plate);
+                // --- 取得簡短車牌顯示結束 ---
+
+                // 決定長條顏色 (New)
+                const barColor = isCompleted ? '#9ca3af' : getPlateColor(record.plate); // 灰色或動態顏色
+
+                // 1. 找到事件的起始日對應的 Grid Index (從 0 開始計算)
+                const firstDayOfMonth = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1).getDay();
+                
+                let startDayOfMonth = cycleStart.getDate();
+                
+                // 計算相對於 Grid 頂部左上角 (Grid Item 0, 0) 的起始索引
+                let startIndex = startDayOfMonth - 1 + firstDayOfMonth; // 這是 Grid Item 的索引 (0-indexed)
+                
+                // 處理跨月開始的情況 (如果事件從上個月開始，索引是該月第一天的星期幾)
+                if (cycleStart.getMonth() !== currentCalendarDate.getMonth()) {
+                    startIndex = firstDayOfMonth; 
+                }
+                
+                // 2. 計算長條應該跨越多少天 (Spanning days)
+                let daysToSpan = getDaysBetween(getFormattedDate(cycleStart), getFormattedDate(cycleEnd));
+                
+                // 3. 確定事件所在的行 (Row) 和軌道 (Track)
+                let eventRow = Math.floor(startIndex / 7); // 事件起始行 (0-indexed)
+                let eventColStart = startIndex % 7 + 1;    // 事件起始欄 (1-indexed)
+                
+                
+                // 調整：如果事件從上個月開始，但開始日是星期日 (0)，則 startIndex=0
+                if (deliveryDate.getMonth() !== currentCalendarDate.getMonth() && firstDayOfMonth > 0) {
+                     eventColStart = 1; 
+                }
+
+                // 處理週邊界：確保長條不會超出當前週，並計算長條的長度
+                let daysRemainingInWeek = 7 - (startIndex % 7);
+                let actualSpanDays = Math.min(daysToSpan, daysRemainingInWeek);
+                
+                // 4. 尋找可用的軌道 (垂直位置)
+                
+                let eventHeight = 22; // 每個事件高度 22px
+                let currentTrackIndex = 0; // 當前事件在該日內的垂直位置 (0, 1, 2...)
+
+                // 查找該週的事件佔用情況
+                const weekKey = eventRow;
+                if (!trackOccupancy[weekKey]) {
+                    trackOccupancy[weekKey] = [false, false, false, false]; // 最多 4 條軌道
+                }
+
+                // 尋找該行中第一個空閒的軌道
+                for (let t = 0; t < trackOccupancy[weekKey].length; t++) {
+                    let isFree = true;
+                    // 檢查長條佔用的所有日子是否都空閒
+                    for (let d = 0; d < actualSpanDays; d++) {
+                        const dayIndex = startIndex + d;
+                        const dayDiv = grid.children[dayIndex];
+                        if (dayDiv && dayDiv.dataset.track && dayDiv.dataset.track.includes(t.toString())) {
+                             isFree = false;
+                             break;
+                        }
+                    }
+                    
+                    if (isFree) {
+                        currentTrackIndex = t;
+                        break;
+                    }
+                }
+                
+                // 標記佔用
+                for (let d = 0; d < actualSpanDays; d++) {
+                    const dayIndex = startIndex + d;
+                    const dayDiv = grid.children[dayIndex];
+                     if (dayDiv) {
+                        dayDiv.dataset.track = (dayDiv.dataset.track || '') + currentTrackIndex + ',';
+                    }
+                }
+
+                const eventTop = 24 + (currentTrackIndex * eventHeight);
+
+                // 5. 繪製事件長條
+                const eventBar = document.createElement('div');
+                eventBar.className = `event-bar pointer-events-auto`;
+                eventBar.style.backgroundColor = barColor; // 動態顏色設置
+                eventBar.setAttribute('onclick', `window.scrollToRecord('${record.id}');`);
+                eventBar.title = `${shortPlateDisplay}: ${record.deliveryLocation} -> ${record.collectionLocation} (${record.deliveryDate} ${record.deliveryTime} - ${record.collectionDate} ${record.collectionTime})`;
+
+                // 設置位置和跨度
+                eventBar.style.top = `${eventTop}px`;
+                eventBar.style.left = `calc(${((eventColStart - 1) / 7) * 100}% + 4px)`; // 計算起始位置 (加上左邊距 4px)
+                eventBar.style.width = `calc(${(actualSpanDays / 7) * 100}% - 8px)`; // 計算長度 (減去左右邊距 8px)
+                
+                // 設置行數 (row)
+                eventBar.style.gridRowStart = eventRow + 1;
+                eventBar.style.gridRowEnd = eventRow + 2;
+
+                const startDate = record.deliveryDate.substring(5).replace('-', '/');
+                const endDate = record.collectionDate.substring(5).replace('-', '/');
+                const content = `${shortPlateDisplay}: ${record.deliveryLocation} -> ${record.collectionLocation} (${startDate} ${record.deliveryTime} - ${endDate} ${record.collectionTime})`;
+                
+                eventBar.textContent = content;
+                
+                overlay.appendChild(eventBar);
+
+            });
+        }
+
+
+        function renderCalendar() {
+            if (!calendarGrid) return;
+            
+            // 清空日曆格和排程疊層
+            calendarGrid.innerHTML = '';
+            calendarEventsOverlay.innerHTML = ''; // Clear events overlay
+            
+            // 設置月份標題
+            currentMonthYear.textContent = currentCalendarDate.toLocaleDateString('zh-TW', {
+                year: 'numeric',
+                month: 'long'
+            });
+
+            const todayStr = getFormattedDate(new Date());
+
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+
+            // 1. 該月第一天是星期幾 (0=日, 1=一...)
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            // 2. 該月總共有幾天
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // 填充上個月的空白
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = "p-1 border border-gray-100 rounded-lg bg-gray-50";
+                calendarGrid.appendChild(emptyDay);
+            }
+
+            // 填充本月日期
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dateStr = getFormattedDate(date);
+
+                const dayDiv = document.createElement('div');
+                // 每個格子需要相對定位來定位日期數字，但同時作為 Grid Item
+                dayDiv.className = `p-1 border border-gray-200 rounded-lg text-sm transition duration-150 calendar-day flex flex-col space-y-1 ${dateStr === todayStr ? 'bg-indigo-200 border-indigo-500' : 'bg-white'}`;
+                
+                dayDiv.innerHTML = `
+                    <div class="day-number ${dateStr === todayStr ? 'text-indigo-800' : 'text-gray-900'}">
+                        ${day}
+                    </div>
+                `;
+                
+                calendarGrid.appendChild(dayDiv);
+            }
+            
+            // 渲染排程長條 (使用獨立的事件渲染函式)
+            renderEventsOverlay(allRecords); 
+        }
+        
+        
+        // 日曆導航控制
+        function changeMonth(delta) {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+            renderCalendar();
+        }
+        
+        // 註冊日曆事件
+        toggleCalendarButton.addEventListener('click', () => {
+            calendarContainer.classList.toggle('hidden');
+            if (!calendarContainer.classList.contains('hidden')) {
+                renderCalendar();
+            }
+        });
+        document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
+        document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
+
+
+        // --- END 日曆邏輯 ---
+
         
         // --- 事件監聽器 ---
 
@@ -1475,6 +1830,9 @@
                 year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
             });
         });
+
+        // IIFE End
+        })();
 
     </script>
 </body>
