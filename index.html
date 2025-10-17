@@ -1247,47 +1247,47 @@
                 statusBlock.className = "flex-shrink-0 text-center leading-none self-center";
                 statusBlock.innerHTML = statusHTML;
 
-                // 1.2 Main Info (Time, Location, Plate)
+                // 1.2 Main Info (Time, Location, Plate, Actions) - 整合所有資訊和按鈕
                 const infoDiv = document.createElement('div');
-                // *** 修正：移除 pr-2，改用 px-2，使用 flex-shrink 允許壓縮 ***
-                infoDiv.className = "flex-grow flex-shrink min-w-0 px-2 space-y-0.5 flex flex-col justify-center"; 
+                // *** 修正：使用 Grid 佈局來控制資訊和按鈕的相對位置 ***
+                infoDiv.className = "flex-grow min-w-0 px-2 grid grid-cols-5 items-start gap-1"; 
                 infoDiv.innerHTML = `
-                    <!-- Line 1: Plate - ADDED plate-fix CSS to help long string wrapping -->
-                    <p class="text-base font-bold text-indigo-700 leading-tight plate-fix min-w-0">
-                        ${simplePlate}
-                    </p>
-                    
-                    <!-- Line 2: Delivery Location/Time - Changed text-sm to text-xs -->
-                    <p class="text-xs text-gray-900 leading-snug min-w-0">
-                        交車: <span class="font-semibold">${record.deliveryDate.substring(5).replace('-', '/')} ${record.deliveryTime}</span>
-                        @ ${record.deliveryLocation}
-                    </p>
-                    
-                    <!-- Line 3/4: Collection Info (If Scheduled) - Changed text-sm to text-xs -->
-                    ${isCollectionScheduled ? 
-                        `<p class="text-xs font-semibold text-orange-600 leading-snug min-w-0">
-                            收車 📥: ${record.collectionDate.substring(5).replace('-', '/')} ${record.collectionTime}
-                            @ ${record.collectionLocation}
-                        </p>`
-                        : ''}
-                `;
+                    <!-- Col 1-3: Plate, Delivery, Collection Info -->
+                    <div class="col-span-3 space-y-0.5 pt-1">
+                        <!-- Line 1: Plate - ADDED plate-fix CSS to help long string wrapping -->
+                        <p class="text-base font-bold text-indigo-700 leading-tight plate-fix min-w-0">
+                            ${simplePlate}
+                        </p>
+                        
+                        <!-- Line 2: Delivery Location/Time - Changed text-sm to text-xs -->
+                        <p class="text-xs text-gray-900 leading-snug min-w-0">
+                            交車: <span class="font-semibold">${record.deliveryDate.substring(5).replace('-', '/')} ${record.deliveryTime}</span>
+                            @ ${record.deliveryLocation}
+                        </p>
+                        
+                        <!-- Line 3/4: Collection Info (If Scheduled) - Changed text-sm to text-xs -->
+                        ${isCollectionScheduled ? 
+                            `<p class="text-xs font-semibold text-orange-600 leading-snug min-w-0">
+                                收車 📥: ${record.collectionDate.substring(5).replace('-', '/')} ${record.collectionTime}
+                                @ ${record.collectionLocation}
+                            </p>`
+                            : ''}
+                    </div>
 
-                // 1.3 Action Controls
-                const actionControls = document.createElement('div');
-                // *** 修正：移除 ml-2，讓它和 infoDiv 貼合 ***
-                actionControls.className = "action-controls flex flex-col items-end space-y-1 flex-shrink-0";
-                actionControls.innerHTML = `
-                    <span id="expand-icon-${recordId}" class="text-lg text-indigo-500 cursor-pointer">▼</span>
-                    <div class="flex space-x-1">
-                        <button onclick="window.openEditModal('${recordId}')" class="px-2 py-1 text-xs font-semibold text-gray-700 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition duration-150">編輯</button>
-                        ${actionButton}
-                        <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 text-xs px-2 py-1">刪除</button>
+                    <!-- Col 4-5: Action Controls - 放置在右側，與資訊區塊在同一級別 -->
+                    <div class="col-span-2 flex flex-col items-end space-y-1 action-controls self-start">
+                        <span id="expand-icon-${recordId}" class="text-lg text-indigo-500 cursor-pointer">▼</span>
+                        <div class="flex space-x-1 justify-end">
+                            <button onclick="window.openEditModal('${recordId}')" class="px-2 py-1 text-xs font-semibold text-gray-700 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition duration-150">編輯</button>
+                            ${actionButton}
+                            <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 text-xs px-2 py-1">刪除</button>
+                        </div>
                     </div>
                 `;
 
                 headerDiv.appendChild(statusBlock);
                 headerDiv.appendChild(infoDiv);
-                headerDiv.appendChild(actionControls);
+                // headerDiv.appendChild(actionControls); // 刪除原有的獨立 actionControls
                 card.appendChild(headerDiv);
 
 
