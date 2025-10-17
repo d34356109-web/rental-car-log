@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>租車交車紀錄系統</title>
-    <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 使用 Inter 字體 */
@@ -42,7 +41,7 @@
         .calendar-day {
             min-height: 80px;
             padding-top: 24px; /* 留給日期數字的空間 */
-            cursor: pointer;
+            cursor: default; /* 取消滑鼠指標變化，避免誤觸 */
             transition: background-color 0.15s;
             position: relative;
         }
@@ -57,7 +56,6 @@
             font-size: 0.875rem; /* text-sm */
             font-weight: 600; /* semi-bold */
         }
-
         /* ------------------------------------------- */
         /* 新增：日曆排程長條樣式 */
         /* ------------------------------------------- */
@@ -78,36 +76,37 @@
             white-space: nowrap;
             transition: transform 0.1s;
             pointer-events: auto; /* 確保可以點擊 */
+            margin: 2px 0; /* 垂直間距 */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            line-height: 20px; /* 確保文字垂直居中 */
         }
         .event-bar:hover {
-            transform: scale(1.02);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transform: scale(1.01);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
         }
-        /* 移除 bg-event-default，改為動態顏色 */
+        /* 修正日曆 Grid 容器以容納長條 */
+        /* 這裡的設定不需要，因為我們用 JS 調整了 min-height */
+        /* #calendar-events-overlay, #calendar-grid {
+             grid-auto-rows: minmax(80px, auto); 
+        } */
         
     </style>
     
-    <!-- PWA / 行動裝置 App 介面設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5">
     <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body class="p-4 md:p-8">
-
-    <!-- 主容器 -->
     <div class="max-w-7xl mx-auto">
         <header class="mb-8 p-4 bg-white shadow-lg rounded-xl">
             <h1 class="3xl font-bold text-gray-800 mb-2">租車交車紀錄控管中心</h1>
             <p class="text-gray-500">使用 Firestore 儲存紀錄，資料即時同步。當前使用者 ID: <span id="user-id-display" class="font-mono text-xs bg-gray-100 p-1 rounded">載入中...</span></p>
         </header>
         
-        <!-- 日曆展開按鈕 -->
         <button id="toggle-calendar" class="mb-4 px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition duration-150 w-full md:w-auto flex items-center justify-center">
-            📅 查看日曆
+            📅 查看排程日曆
         </button>
-
-        <!-- 日曆容器 (預設隱藏) -->
         <div id="calendar-container" class="bg-white p-4 rounded-xl shadow-xl mb-6 hidden">
             <div class="flex justify-between items-center mb-4">
                 <button id="prev-month" class="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
@@ -129,34 +128,22 @@
             </div>
             <div id="calendar-grid-container" class="calendar-grid-container">
                  <div id="calendar-grid" class="grid grid-cols-7 gap-1">
-                    <!-- 日期將在此處生成 -->
-                 </div>
+                    </div>
                  <div id="calendar-events-overlay" class="absolute inset-0 grid grid-cols-7 gap-1 pointer-events-none">
-                    <!-- 事件長條將在此處生成 -->
-                 </div>
+                    </div>
             </div>
         </div>
-
-        <!-- 當前日期與排程提示 (New) -->
         <div class="mb-4 p-4 bg-indigo-50 border-l-4 border-indigo-600 rounded-lg shadow-md">
             <p class="text-sm font-semibold text-indigo-700">📆 今日日期: <span id="current-date-display" class="font-mono"></span></p>
-            <!-- 調整為 text-sm for label, list content is controlled by JS to be text-xs -->
-            <p class="text-sm font-bold text-red-700 mt-1">💡 行程提示:</p>
+            <p class="text-lg font-bold text-red-700 mt-1">💡 行程提示:</p>
             <div id="schedule-tip" class="space-y-1">載入中...</div>
         </div>
-
-        <!-- 訊息/載入指示器 -->
         <div id="message-box" class="mb-6 p-3 rounded-lg text-sm transition-all duration-300 hidden"></div>
-
-        <!-- 新增紀錄表單 (行動裝置上為單欄，平板以上為多欄) - 只用於交車 -->
         <div class="bg-white p-6 shadow-xl rounded-xl mb-10">
             <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">新增「交車」紀錄 (開啟新租賃週期)</h2>
             <form id="record-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
-                <!-- 動作 (固定為交車) -->
                 <input type="hidden" id="record-action" value="交車">
-
-                <!-- 交車資訊區塊 -->
                 <div>
                     <label for="record-date" class="block text-sm font-medium text-gray-700">交車日期</label>
                     <input type="date" id="record-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
@@ -167,11 +154,9 @@
                 </div>
                 <div>
                     <label for="record-location" class="block text-sm font-medium text-gray-700">交車地點</label>
-                    <!-- 地點改為文字輸入框 + datalist -->
                     <input type="text" id="record-location" list="location-list" placeholder="請選擇或輸入交車地點" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 
-                <!-- 車牌 (合併顯示 ETC 卡號) -->
                 <div>
                     <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌 (ETC 卡號)</label>
                     <select id="record-plate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
@@ -179,19 +164,15 @@
                     </select>
                 </div>
                 
-                <!-- 里程數 (交車時的起始里程) -->
                 <div>
                     <label for="record-mileage" class="block text-sm font-medium text-gray-700">起始里程數 (Km)</label>
                     <input type="number" id="record-mileage" placeholder="例如: 12500" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
-
-                <!-- 需求/備註 -->
                 <div class="md:col-span-2">
                     <label for="record-notes" class="block text-sm font-medium text-gray-700">需求 / 備註 (交車資訊)</label>
                     <textarea id="record-notes" rows="2" placeholder="例如: 兩張兒童座椅(2歲跟5歲)；車型: Toyota 40系" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                 </div>
                 
-                <!-- 客戶資料區塊 -->
                 <div class="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 mt-4">
                     <div class="sm:col-span-3 text-sm font-semibold text-gray-700 border-b pb-2 mb-2">客戶資料 (選填)</div>
                     <div>
@@ -207,8 +188,6 @@
                         <input type="date" id="customer-dob" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                 </div>
-
-                <!-- 提交按鈕 -->
                 <div class="md:col-span-3 flex justify-end">
                     <button type="submit" id="submit-button" class="mt-4 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400">
                         新增交車紀錄
@@ -216,12 +195,9 @@
                 </div>
             </form>
         </div>
-
-        <!-- 紀錄列表與查詢 -->
         <div class="bg-white p-6 shadow-xl rounded-xl">
             <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">所有租賃週期紀錄</h2>
             
-            <!-- 查詢/排序控制項 -->
             <div class="flex flex-col sm:flex-row gap-4 mb-4">
                 <input type="text" id="search-input" placeholder="查詢：輸入地點、車牌、備註關鍵字" class="flex-grow p-2 border rounded-lg focus:border-indigo-500">
                 <button onclick="window.refreshRecords()" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-150 flex-shrink-0">
@@ -231,53 +207,38 @@
                     <span id="sort-icon">📅</span> 排序: 由新到舊
                 </button>
             </div>
-
-            <!-- 紀錄列表容器 (新 Card View) -->
             <div id="records-list-container" class="space-y-4">
-                <!-- 紀錄將會動態載入此處 (Card View) -->
-            </div>
+                </div>
             
             <p id="no-records-message" class="text-center py-10 text-gray-500 hidden">目前沒有任何紀錄。</p>
         </div>
-
     </div>
-
-    <!-- 收車模態視窗 (Collection Modal) -->
     <div id="collection-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="collection-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4" id="modal-title"></h3>
             
             <p class="text-sm text-gray-600 mb-4">正在為 <span id="modal-plate-display" class="font-bold text-indigo-600"></span> 記錄資訊。</p>
-
             <form id="collection-form">
                 <input type="hidden" id="modal-record-id">
-                <input type="hidden" id="modal-mode"> <!-- 隱藏欄位用於判斷模式：'full' 或 'mileage' -->
-
-                <div class="grid grid-cols-2 gap-4">
-                    <!-- 收車日期 -->
+                <input type="hidden" id="modal-mode"> <div class="grid grid-cols-2 gap-4">
                     <div id="modal-date-container">
                         <label for="collection-date" class="block text-sm font-medium text-gray-700">收車日期</label>
                         <input type="date" id="collection-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
-                    <!-- 收車時間 -->
                     <div id="modal-time-container">
                         <label for="collection-time" class="block text-sm font-medium text-gray-700">收車時間</label>
                         <input type="time" id="collection-time" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
-                    <!-- 收車地點 -->
                     <div class="col-span-2" id="modal-location-container">
                         <label for="collection-location" class="block text-sm font-medium text-gray-700">收車地點</label>
-                        <!-- 地點改為文字輸入框 + datalist -->
                         <input type="text" id="collection-location" list="location-list" placeholder="請選擇或輸入收車地點" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
-                    <!-- 結束里程數 -->
                     <div class="col-span-2" id="modal-mileage-container">
                         <label for="end-mileage" class="block text-sm font-medium text-gray-700">結束里程數 (Km)</label>
                         <input type="number" id="end-mileage" placeholder="請輸入收車時里程數" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                         <p class="text-xs text-gray-500 mt-1">交車里程數: <span id="modal-start-mileage"></span> Km</p>
                     </div>
                 </div>
-
                 <div class="flex justify-end space-x-3 mt-6">
                     <button type="button" onclick="window.closeCollectionModal()" class="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">取消</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150" id="collection-submit-btn">
@@ -288,7 +249,6 @@
         </div>
     </div>
     
-    <!-- 編輯模態視窗 (Edit Modal - New) -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="edit-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">編輯租賃週期紀錄</h3>
@@ -297,8 +257,6 @@
                 <input type="hidden" id="edit-record-id">
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-                    <!-- 左側：交車資訊 (Delivery) -->
                     <div class="p-4 border rounded-lg bg-indigo-50 space-y-3">
                         <h4 class="font-bold text-lg text-indigo-700 border-b pb-2 mb-3">交車資訊 (Delivery)</h4>
                         
@@ -319,7 +277,6 @@
                         
                         <div>
                             <label for="edit-delivery-location" class="block text-sm font-medium text-gray-700">交車地點</label>
-                            <!-- 地點改為文字輸入框 + datalist -->
                             <input type="text" id="edit-delivery-location" list="location-list" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
                         </div>
                         
@@ -328,8 +285,6 @@
                             <input type="number" id="edit-start-mileage" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
                         </div>
                     </div>
-
-                    <!-- 中間：收車資訊 (Collection) -->
                     <div class="p-4 border rounded-lg bg-yellow-50 space-y-3">
                         <h4 class="font-bold text-lg text-yellow-700 border-b pb-2 mb-3">收車資訊 (Collection)</h4>
                         
@@ -345,8 +300,7 @@
                         
                         <div>
                             <label for="edit-collection-location" class="block text-sm font-medium text-gray-700">收車地點</label>
-                             <!-- 地點改為文字輸入框 + datalist -->
-                            <input type="text" id="edit-collection-location" list="location-list" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
+                             <input type="text" id="edit-collection-location" list="location-list" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
                         </div>
                         
                         <div>
@@ -355,7 +309,6 @@
                         </div>
                     </div>
                     
-                    <!-- 右側：客戶與備註 -->
                     <div class="p-4 border rounded-lg bg-gray-50 space-y-3">
                         <h4 class="font-bold text-lg text-gray-700 border-b pb-2 mb-3">客戶資訊與備註</h4>
                         
@@ -368,7 +321,6 @@
                             <label for="edit-customer-phone" class="block text-sm font-medium text-gray-700">聯絡電話</label>
                             <input type="tel" id="edit-customer-phone" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
                         </div>
-
                         <div>
                             <label for="edit-customer-dob" class="block text-sm font-medium text-gray-700">出生年月日</label>
                             <input type="date" id="edit-customer-dob" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
@@ -380,7 +332,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="flex justify-end space-x-3 mt-6">
                     <button type="button" onclick="window.closeEditModal()" class="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">取消</button>
                     <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150" id="edit-submit-btn">
@@ -390,25 +341,18 @@
             </form>
         </div>
     </div>
-
-    <!-- Datalist for Location Suggestions (for select-or-custom-input behavior) -->
     <datalist id="location-list">
-        <!-- Options populated by JavaScript -->
-    </datalist>
-
-    <!-- Firebase SDKs -->
+        </datalist>
     <script type="module">
         // IIFE Start: Wrap the initialization logic to prevent global scope conflicts
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
         (function() { 
         
         // 設定 Firebase Debug Log
         setLogLevel('Debug');
-
         // =================================================================
         // *** 您的 Firebase 專案配置已成功載入！ ***
         // =================================================================
@@ -423,7 +367,6 @@
         };
         const YOUR_PROJECT_ID = "rentalcarlog-app"; 
         // =================================================================
-
         // =================================================================
         // *** 固定車牌與 ETC 卡號對應表 (車牌下拉選單用) ***
         // =================================================================
@@ -433,7 +376,6 @@
             "成田331わ7777 總統座": "9160 0000 1326 6009",
             "成田331わ88 4WD 8座": "9160 0000 1410 6501",
         };
-
         // =================================================================
         // *** 地點選項列表 (已還原) ***
         // =================================================================
@@ -458,8 +400,6 @@
             '#ec4899', // Pink 500
         ];
         // === 顏色定義結束 ===
-
-
         let app;
         let db;
         let auth;
@@ -469,7 +409,6 @@
         let sortDirection = 'desc'; // 'desc' (新到舊) 或 'asc' (舊到新)
         
         let currentCalendarDate = new Date(); // New: 用於日曆顯示
-
         const messageBox = document.getElementById('message-box');
         const recordsListContainer = document.getElementById('records-list-container'); // 變更名稱為 List Container
         const noRecordsMessage = document.getElementById('no-records-message');
@@ -481,13 +420,16 @@
         const locationSelect = document.getElementById('record-location'); 
         const collectionLocationSelect = document.getElementById('collection-location'); 
         
-        // 日曆元素
+        // 日曆元素 (已還原)
         const calendarContainer = document.getElementById('calendar-container');
         const currentMonthYear = document.getElementById('current-month-year');
         const calendarGrid = document.getElementById('calendar-grid');
         const toggleCalendarButton = document.getElementById('toggle-calendar');
-        const calendarEventsOverlay = document.getElementById('calendar-events-overlay'); // New Overlay
-
+        const calendarEventsOverlay = document.getElementById('calendar-events-overlay'); 
+        
+        // 日期區間篩選元素 (已移除)
+        // const filterStartDateInput = document.getElementById('filter-start-date');
+        // const filterEndDateInput = document.getElementById('filter-end-date');
         
         // 新增的客戶資料輸入欄位
         const customerNameInput = document.getElementById('customer-name');
@@ -508,14 +450,11 @@
         const editCustomerPhoneInput = document.getElementById('edit-customer-phone');
         const editCustomerDobInput = document.getElementById('edit-customer-dob');
         const editNotesInput = document.getElementById('edit-notes');
-
-
         /** 顯示應用程式訊息 */
         function displayMessage(text, type = 'info') {
             messageBox.textContent = text;
             messageBox.className = 'mb-6 p-3 rounded-lg text-sm transition-all duration-300';
             messageBox.classList.remove('hidden');
-
             switch (type) {
                 case 'success':
                     messageBox.classList.add('bg-green-100', 'text-green-800');
@@ -528,12 +467,10 @@
                     messageBox.classList.add('bg-blue-100', 'text-blue-800');
                     break;
             }
-
             setTimeout(() => {
                 messageBox.classList.add('hidden');
             }, 5000);
         }
-
         /** 格式化日期為 YYYY-MM-DD 格式 */
         function getFormattedDate(date) {
             const year = date.getFullYear();
@@ -541,13 +478,18 @@
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
-
         /** 格式化日期為 YYYY-MM-DD HH:MM 格式 */
         function createDateTime(dateStr, timeStr) {
             return new Date(`${dateStr}T${timeStr}:00`);
         }
-
-
+        
+        /** 格式化日期字串為 Date 物件，並將時間歸零 (用於範圍比較) */
+        function dateStringToStartOfDay(dateStr) {
+             if (!dateStr) return null;
+             // 確保時區不會影響日期比較 (使用 UTC)
+             const date = new Date(dateStr + 'T00:00:00Z');
+             return isNaN(date) ? null : date;
+        }
         // --- Firebase 初始化和認證 ---
         function initFirebase() {
             const submitButton = document.getElementById('submit-button'); // 取得按鈕元素
@@ -556,7 +498,6 @@
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-
                 // 認證狀態變更監聽
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
@@ -579,7 +520,6 @@
                         }
                     }
                 });
-
             } catch (e) {
                 console.error("Firebase 初始化失敗:", e);
                 displayMessage(`Firebase 初始化失敗。錯誤訊息: ${e.message}。無法儲存紀錄。`, 'error'); 
@@ -588,7 +528,6 @@
                 isAuthReady = true;
             }
         }
-
         /** 獲取 Firestore Collection Path (共享路徑) */
         function getCollectionPath() {
             // 協作路徑: 所有登入的使用者 (A & B) 都將存取此路徑
@@ -597,10 +536,7 @@
             
             return `artifacts/${sharedAppId}/public/data/${sharedCollectionName}`;
         }
-
-
         // --- 資料操作 (CRUD) ---
-
         /** 新增紀錄到 Firestore (僅限交車) */
         async function addRecord(event) {
             event.preventDefault();
@@ -608,14 +544,11 @@
                 displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
                 return;
             }
-
             document.getElementById('submit-button').disabled = true;
-
             // 客戶資料 (選填)
             const customerName = customerNameInput.value || '';
             const customerPhone = customerPhoneInput.value || '';
             const customerDob = customerDobInput.value || '';
-
             // 交車資訊 (必填)
             const date = document.getElementById('record-date').value;
             const time = document.getElementById('record-time').value;
@@ -627,7 +560,6 @@
             
             const mileage = document.getElementById('record-mileage').value;
             const notes = document.getElementById('record-notes').value || '';
-
             if (!plate || !etcId) {
                 displayMessage("請選擇車牌 (ETC 卡號會自動從選單中帶入)。", 'error');
                 document.getElementById('submit-button').disabled = false;
@@ -641,14 +573,11 @@
                  document.getElementById('submit-button').disabled = false;
                  return;
             }
-
-
             if (!location) {
                 displayMessage("請輸入交車地點。", 'error');
                 document.getElementById('submit-button').disabled = false;
                 return;
             }
-
             const dateTimeString = `${date}T${time}:00`;
             const recordTime = new Date(dateTimeString);
             
@@ -657,13 +586,11 @@
                 document.getElementById('submit-button').disabled = false;
                 return;
             }
-
             const newRecord = {
                 // 客戶資料
                 customerName: customerName,
                 customerPhone: customerPhone,
                 customerDob: customerDob,
-
                 // 交車資訊
                 action: action, // 交車
                 deliveryDate: date,
@@ -682,7 +609,6 @@
                 
                 timestamp: Timestamp.fromDate(recordTime) // 使用交車時間作為主要排序
             };
-
             try {
                 const collectionRef = collection(db, getCollectionPath());
                 await addDoc(collectionRef, newRecord);
@@ -695,7 +621,6 @@
                 document.getElementById('submit-button').disabled = false;
             }
         }
-
         /** 更新紀錄 (收車或登錄里程) */
         async function submitCollectionUpdate(event) {
             event.preventDefault();
@@ -703,7 +628,6 @@
                 displayMessage("資料庫連線或用戶認證失敗，無法完成收車。", 'error');
                 return;
             }
-
             const recordId = document.getElementById('modal-record-id').value;
             const mode = document.getElementById('modal-mode').value;
             
@@ -714,13 +638,11 @@
             
             const updateData = {};
             const collectionSubmitBtn = document.getElementById('collection-submit-btn');
-
             // 取得起始里程 (用於里程檢查)
             const record = allRecords.find(r => r.id === recordId);
             const startMileage = record ? record.startMileage : 0;
             
             collectionSubmitBtn.disabled = true;
-
             if (mode === 'full') {
                 // --- 模式 1: 記錄時間/地點 (預收車) ---
                 if (!collectionDate || !collectionTime || !collectionLocation) {
@@ -728,7 +650,6 @@
                     collectionSubmitBtn.disabled = false;
                     return;
                 }
-
                 updateData.collectionDate = collectionDate;
                 updateData.collectionTime = collectionTime;
                 updateData.collectionLocation = collectionLocation;
@@ -744,7 +665,6 @@
                     }
                     updateData.endMileage = endMileage;
                 }
-
             } else if (mode === 'mileage') {
                 // --- 模式 2: 登錄最終里程 (結算) ---
                 const endMileage = parseInt(endMileageInput, 10);
@@ -762,11 +682,9 @@
                 
                 updateData.endMileage = endMileage;
             }
-
             try {
                 const docRef = doc(db, getCollectionPath(), recordId);
                 await updateDoc(docRef, updateData);
-
                 if (updateData.endMileage) {
                      displayMessage(`收車紀錄已完成！里程差: ${(updateData.endMileage - startMileage).toLocaleString()} Km`, 'success');
                 } else {
@@ -774,7 +692,6 @@
                 }
                 
                 window.closeCollectionModal();
-
             } catch (e) {
                 console.error("更新收車紀錄時發生錯誤:", e);
                 displayMessage(`儲存失敗: ${e.message}`, 'error');
@@ -782,7 +699,6 @@
                 collectionSubmitBtn.disabled = false;
             }
         }
-
         /** 刪除紀錄 */
         async function deleteLogRecord(id) {
             // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
@@ -793,7 +709,6 @@
             
             const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的完整週期紀錄嗎？`);
             if (!confirmation) return;
-
             try {
                 const docRef = doc(db, getCollectionPath(), id);
                 await deleteDoc(docRef);
@@ -817,16 +732,13 @@
             
             const modalTitle = document.getElementById('modal-title');
             const modalModeInput = document.getElementById('modal-mode');
-
             // 設置通用值
             document.getElementById('modal-record-id').value = recordId;
             document.getElementById('modal-plate-display').textContent = record.plate;
             document.getElementById('modal-start-mileage').textContent = record.startMileage ? record.startMileage.toLocaleString() : '0';
             modalModeInput.value = mode;
-
             // 設置收車地點 Input 值
             collectionLocationSelect.value = record.collectionLocation || '';
-
             // 清除上次的輸入值
             document.getElementById('end-mileage').value = ''; 
             
@@ -846,7 +758,6 @@
                 // --- 模式 1: 記錄時間/地點 (full) ---
                 modalTitle.textContent = '記錄收車時間與地點';
                 document.getElementById('collection-submit-btn').textContent = '確認並儲存收車時間';
-
                 document.getElementById('modal-date-container').classList.remove('hidden');
                 document.getElementById('modal-time-container').classList.remove('hidden');
                 document.getElementById('modal-location-container').classList.remove('hidden');
@@ -861,7 +772,6 @@
                 document.getElementById('collection-time').value = record.collectionTime || nowTime;
                 
             }
-
             // 顯示模態視窗
             modal.classList.remove('hidden');
             setTimeout(() => {
@@ -869,7 +779,6 @@
                 modalContent.classList.add('scale-100', 'opacity-100');
             }, 10);
         }
-
         function closeCollectionModal() {
             const modal = document.getElementById('collection-modal');
             const modalContent = document.getElementById('collection-modal-content');
@@ -886,17 +795,14 @@
         document.getElementById('collection-form').addEventListener('submit', submitCollectionUpdate);
         
         // --- 編輯模態視窗邏輯 (New) ---
-
         function openEditModal(recordId) {
             const record = allRecords.find(r => r.id === recordId);
             if (!record) {
                 displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
                 return;
             }
-
             // 1. 設置 ID
             document.getElementById('edit-record-id').value = recordId;
-
             // 2. 設置交車資訊
             editPlateInput.value = record.plate; // 車牌不可編輯
             editDeliveryDateInput.value = record.deliveryDate;
@@ -906,8 +812,6 @@
             
             // 設置交車地點 Input 值
             editDeliveryLocationSelect.value = record.deliveryLocation || '';
-
-
             // 3. 設置收車資訊
             editCollectionDateInput.value = record.collectionDate || '';
             editCollectionTimeInput.value = record.collectionTime || '';
@@ -930,7 +834,6 @@
                 modalContent.classList.add('scale-100', 'opacity-100');
             }, 10);
         }
-
         async function submitEditUpdate(event) {
             event.preventDefault();
             if (!db || !userId) {
@@ -941,12 +844,10 @@
             const recordId = document.getElementById('edit-record-id').value;
             const originalRecord = allRecords.find(r => r.id === recordId);
             const editSubmitBtn = document.getElementById('edit-submit-btn');
-
             if (!originalRecord) {
                 displayMessage("找不到原始紀錄，無法修改。", 'error');
                 return;
             }
-
             editSubmitBtn.disabled = true;
             
             const startMileage = parseInt(editStartMileageInput.value, 10);
@@ -967,13 +868,11 @@
                 deliveryLocation: editDeliveryLocationSelect.value.trim(), // 從 Input 獲取值並清理
                 startMileage: startMileage,
                 notes: editNotesInput.value || '',
-
                 // 收車資訊 (Collection) - 可編輯
                 collectionDate: editCollectionDateInput.value || null,
                 collectionTime: editCollectionTimeInput.value || null,
                 collectionLocation: editCollectionLocationSelect.value.trim() || null, // 從 Input 獲取值並清理
                 endMileage: endMileage,
-
                 // 客戶資訊 - 可編輯
                 customerName: editCustomerNameInput.value || null,
                 customerPhone: editCustomerPhoneInput.value || null,
@@ -987,14 +886,12 @@
             const oldPlate = originalRecord.plate;
             const newStartMileage = updateData.startMileage;
             const newEndMileage = updateData.endMileage;
-
             // 如果交車里程被清空或不合法
             if (isNaN(newStartMileage)) {
                 displayMessage("起始里程必須是有效數字。", 'error');
                 editSubmitBtn.disabled = false;
                 return;
             }
-
             // 如果紀錄從已完成變為待收車，則需要檢查車輛是否會與其他紀錄衝突
             const wasCompleted = originalRecord.endMileage !== null;
             const isNowCompleted = newEndMileage !== null;
@@ -1008,8 +905,6 @@
                     return;
                 }
             }
-
-
             try {
                 const docRef = doc(db, getCollectionPath(), recordId);
                 await updateDoc(docRef, updateData);
@@ -1022,7 +917,6 @@
                 editSubmitBtn.disabled = false;
             }
         }
-
         function closeEditModal() {
             const modal = document.getElementById('edit-modal');
             const modalContent = document.getElementById('edit-modal-content');
@@ -1036,8 +930,6 @@
         window.closeEditModal = closeEditModal;
         document.getElementById('edit-form').addEventListener('submit', submitEditUpdate);
         // --- END 編輯模態視窗邏輯 ---
-
-
         
         // --- 車輛防呆邏輯 ---
         
@@ -1045,7 +937,6 @@
         function getUnavailablePlatesForTime(records, proposedDeliveryTimestamp) {
             const proposedTime = proposedDeliveryTimestamp.getTime();
             const now = new Date().getTime(); // 獲取當前時間
-
             return records
                 .filter(record => {
                     // 只檢查未結算（open）的週期
@@ -1059,7 +950,6 @@
                         
                         // 衝突條件: 擬議時間落在 [交車時間, 排定收車時間] 之間
                         return deliveryTime < proposedTime && collectionTime > proposedTime;
-
                     } else {
                         // Case B: 週期尚未排定收車時間 (Open-ended rental)
                         
@@ -1084,7 +974,6 @@
                 })
                 .map(record => record.plate);
         }
-
         /** 設置車牌和 ETC 卡號的對應邏輯 */
         function setupPlateEtcMapping(unavailablePlates = []) {
             plateSelect.innerHTML = '<option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>'; 
@@ -1107,8 +996,6 @@
             });
         }
         // --- END 車輛防呆邏輯 ---
-
-
         /** 獲取簡化的車牌號碼 */
         function getShortPlateDisplay(fullPlate) {
             // 規則 1: 成田331わ7777 總統座 -> 7777 總統座
@@ -1130,8 +1017,6 @@
             // Fallback: 如果不符合上述規則，則返回完整車牌
             return fullPlate;
         }
-
-
         /** 設置地點 Datalist 選項 (New) */
         function setupDatalistOptions() {
             const datalist = document.getElementById('location-list');
@@ -1144,8 +1029,6 @@
                 datalist.appendChild(option);
             });
         }
-
-
         /** 顯示/隱藏詳細資訊 */
         function toggleDetails(id) {
             const detailRow = document.getElementById(`detail-row-${id}`);
@@ -1184,33 +1067,38 @@
             }
         }
         window.scrollToRecord = scrollToRecord;
-
+        /** 處理日期區間篩選 */
+        function handleDateFilter() {
+            renderRecords(allRecords);
+        }
+        window.handleDateFilter = handleDateFilter;
+        /** 清除日期篩選 */
+        function clearDateFilter() {
+            filterStartDateInput.value = '';
+            filterEndDateInput.value = '';
+            renderRecords(allRecords);
+        }
+        window.clearDateFilter = clearDateFilter;
         /** 更新行程提示 (New) */
         function updateScheduleTip() {
             const today = new Date();
             const tomorrow = new Date();
             tomorrow.setDate(today.getDate() + 1);
-            const dayAfterTomorrow = new Date(); // New calculation for D+2
+            const dayAfterTomorrow = new Date();
             dayAfterTomorrow.setDate(today.getDate() + 2); 
-
             const todayStr = getFormattedDate(today);
             const tomorrowStr = getFormattedDate(tomorrow);
-            const dayAfterTomorrowStr = getFormattedDate(dayAfterTomorrow); // D+2 string format
+            const dayAfterTomorrowStr = getFormattedDate(dayAfterTomorrow);
             
-            // Helper function to convert YYYY-MM-DD to MM/DD
             const getDisplayDate = (dateStr) => dateStr.substring(5).replace('-', '/');
-
-
-            // 1. 今日收車: collectionDate = today 這個邏輯是對的，但為了日曆的週期完整性，這裡只處理提示
+            // 1. 今日收車
             const todayCollections = allRecords.filter(record => 
                 record.collectionDate === todayStr && record.endMileage === null
             );
-
             // 2. 明日收車
             const tomorrowCollections = allRecords.filter(record => 
                 record.collectionDate === tomorrowStr && record.endMileage === null
             );
-
             // 3. 明日交車
             const tomorrowDeliveries = allRecords.filter(record => 
                 record.deliveryDate === tomorrowStr
@@ -1220,27 +1108,22 @@
             const dayAfterTomorrowCollections = allRecords.filter(record => 
                 record.collectionDate === dayAfterTomorrowStr && record.endMileage === null
             );
-
             // 5. 後天交車
             const dayAfterTomorrowDeliveries = allRecords.filter(record => 
                 record.deliveryDate === dayAfterTomorrowStr
             );
-
             let tipParts = [];
-
             // Helper function to format details
             const formatDetails = (records, type) => {
                 if (records.length === 0) return [];
                 
                 const timeField = (type === 'Delivery' ? 'deliveryTime' : 'collectionTime');
                 const locationField = (type === 'Delivery' ? 'deliveryLocation' : 'collectionLocation');
-
                 return records.map(r => {
-                    const plate = getShortPlateDisplay(r.plate); // 使用簡短車牌顯示
+                    const plate = getShortPlateDisplay(r.plate); 
                     const time = r[timeField];
                     const location = r[locationField];
                     
-                    // Determine Day Text and ADD DATE (FIXED)
                     const dateToCheck = (type === 'Delivery' ? r.deliveryDate : r.collectionDate);
                     let dayText;
                     
@@ -1251,21 +1134,18 @@
                     } else if (dateToCheck === dayAfterTomorrowStr) {
                         dayText = `後天 (${getDisplayDate(dayAfterTomorrowStr)})`;
                     } else {
-                         // Should not happen with current filtering, but keep for robustness
                          dayText = getDisplayDate(dateToCheck); 
                     }
                     
                     const typeText = (type === 'Delivery' ? '交車' : '收車');
-
                     const tipContent = `${dayText}有 <strong>1</strong> 筆${typeText}排程: ${plate}，時間：${time}，地點：${location}。`;
                     
                     return {
-                        id: r.id, // Store the ID for clickability
+                        id: r.id, 
                         html: tipContent
                     };
                 });
             };
-
             // Gather all tips as objects (Order: Today -> Tomorrow -> D+2)
             const allTips = [
                 ...formatDetails(todayCollections, 'Collection'),
@@ -1278,54 +1158,48 @@
             const tipElement = document.getElementById('schedule-tip'); 
             
             if (allTips.length === 0) {
-                // Small, normal text for 'no schedule'
                 tipElement.innerHTML = `<span class="text-xs text-gray-600">無當前重要排程提示。</span>`;
             } else {
-                // Render list with onclick functionality
                 const listHTML = allTips.map(tip => 
                     `<div onclick="window.scrollToRecord('${tip.id}')" 
                           class="text-xs font-semibold text-red-900 cursor-pointer hover:bg-red-100 p-1 rounded transition duration-150">
                         ${tip.html}
                     </div>`
                 ).join('');
-
                 tipElement.innerHTML = listHTML;
             }
             
             // 每次更新完提示後，重新渲染日曆 (New)
             renderCalendar();
         }
-
-
         /** 渲染紀錄列表 (Card View) */
         function renderRecords(records) {
             recordsListContainer.innerHTML = '';
             
             if (records.length === 0) {
                 noRecordsMessage.classList.remove('hidden');
-                updateScheduleTip(); // 確保無紀錄時提示也能更新
+                updateScheduleTip(); 
                 return;
             }
-
             noRecordsMessage.classList.add('hidden');
-
+            
+            // --- 2. 應用排序 ---
             const sortedRecords = [...records].sort((a, b) => {
                 const timeA = a.timestamp.toDate().getTime();
                 const timeB = b.timestamp.toDate().getTime();
                 
                 if (sortDirection === 'desc') {
-                    return timeB - timeA; // 新到舊
+                    return timeB - timeA; 
                 } else {
-                    return timeA - timeB; // 舊到新
+                    return timeA - timeB; 
                 }
             });
-
+            // --- 3. 渲染過濾後的紀錄 ---
             // 執行查詢過濾
             const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
             
-            // 修正邏輯：只有在 searchTerm 不為空時才執行過濾
             const filteredRecords = sortedRecords.filter(record => {
-                if (!searchTerm) return true; // 如果沒有搜尋詞，顯示所有紀錄
+                if (!searchTerm) return true; 
                 
                 return (
                     record.deliveryLocation.toLowerCase().includes(searchTerm) ||
@@ -1337,8 +1211,6 @@
                     record.etcId.toLowerCase().includes(searchTerm)
                 );
             });
-
-
             filteredRecords.forEach(record => {
                 const recordId = record.id; 
                 const isCollectionScheduled = record.collectionDate !== null && record.collectionTime !== null;
@@ -1346,7 +1218,6 @@
                 const isCompleted = record.endMileage !== null;
                 
                 let statusHTML, actionButton, actionMode;
-
                 if (isCompleted) {
                     statusHTML = `<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 font-semibold">已完成</span>`;
                     actionButton = `<span class="px-3 py-1 text-xs font-semibold text-green-700">完成結算</span>`;
@@ -1368,7 +1239,6 @@
                 
                 // 提取簡短的車牌顯示 (新需求)
                 const shortPlateDisplay = getShortPlateDisplay(record.plate);
-
                 // --- 1. 卡片摘要 DIV (Summary Row) ---
                 const card = document.createElement('div');
                 card.id = `summary-row-${recordId}`;
@@ -1379,7 +1249,6 @@
                          window.toggleDetails(recordId);
                     }
                 };
-
                 const headerDiv = document.createElement('div');
                 // 使用 Flexbox 佈局，讓狀態區塊、資訊區塊和操作按鈕在手機上水平排列
                 headerDiv.className = "p-2 flex items-start justify-between border-b border-gray-100 flex-nowrap"; 
@@ -1388,25 +1257,21 @@
                 const statusBlock = document.createElement('div');
                 statusBlock.className = "flex-shrink-0 text-center leading-none self-center";
                 statusBlock.innerHTML = statusHTML;
-
                 // 1.2 Main Info (Center)
                 const infoDiv = document.createElement('div');
                 // 減少 padding 和 margin，讓中間資訊更緊湊
                 infoDiv.className = "flex-grow min-w-0 px-2 space-y-0.5"; 
                 
                 infoDiv.innerHTML = `
-                    <!-- Line 1: Plate - 使用簡短顯示 -->
                     <p class="text-base font-bold text-indigo-700 leading-tight plate-fix min-w-0">
                         ${shortPlateDisplay}
                     </p>
                     
-                    <!-- Line 2: Delivery Info -->
                     <p class="text-xs text-gray-900 leading-snug min-w-0">
                         交車: <span class="font-semibold">${record.deliveryDate.substring(5).replace('-', '/')} ${record.deliveryTime}</span>
                         @ ${record.deliveryLocation}
                     </p>
                     
-                    <!-- Line 3: Collection Info (If Scheduled) -->
                     ${isCollectionScheduled ? 
                         `<p class="text-xs font-semibold text-orange-600 leading-snug min-w-0">
                             收車 📥: ${record.collectionDate.substring(5).replace('-', '/')} ${record.collectionTime}
@@ -1414,7 +1279,6 @@
                         </p>`
                         : ''}
                 `;
-
                 // 1.3 Action Controls (Right Side)
                 const actionControls = document.createElement('div');
                 // 使用 Flexbox column 垂直堆疊按鈕
@@ -1425,14 +1289,10 @@
                     ${actionButton}
                     <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 text-xs px-2 py-1 w-full whitespace-nowrap">刪除</button>
                 `;
-
-
                 headerDiv.appendChild(statusBlock);
                 headerDiv.appendChild(infoDiv);
                 headerDiv.appendChild(actionControls);
                 card.appendChild(headerDiv);
-
-
                 // --- 2. 詳細內容 DIV (Detail Row) - 預設隱藏 ---
                 const detailDiv = document.createElement('div');
                 detailDiv.id = `detail-row-${recordId}`;
@@ -1447,25 +1307,18 @@
                         <p><span class="font-medium text-gray-500">生日:</span> ${record.customerDob || '—'}</p>
                     </div>
                 ` : `<div class="sm:col-span-2 border-b pb-2 mb-3"><p class="font-bold text-base text-gray-800">客戶資訊: 無記錄</p></div>`;
-
-
                 // 組合詳細資訊內容
                 detailDiv.innerHTML = `
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
                         
-                        <!-- 週期概要 -->
                         <div class="space-y-1 sm:col-span-2 border-b pb-2 mb-2">
                             <p class="font-bold text-lg text-gray-800">車輛: ${record.plate} (${record.etcId || '—'})</p>
                         </div>
-
-                        <!-- 交車資訊 -->
                         <div class="space-y-1 p-3 border rounded-lg bg-white shadow-sm">
                             <p class="font-bold text-green-700">交車 (Delivery)</p>
                             <p><span class="font-medium text-gray-500">時間/地點:</span> ${record.deliveryDate} ${record.deliveryTime} / ${record.deliveryLocation}</p>
                             <p><span class="font-medium text-gray-500">起始里程:</span> <span class="font-bold text-indigo-600">${record.startMileage ? record.startMileage.toLocaleString() : '—'} Km</span></p>
                         </div>
-
-                        <!-- 收車資訊 -->
                         <div class="space-y-1 p-3 border rounded-lg ${isCompleted ? 'bg-teal-50 shadow-sm' : isTimeLogged ? 'bg-orange-50 shadow-sm' : 'bg-red-50 shadow-sm'}">
                             <p class="font-bold ${isCompleted ? 'text-teal-700' : isTimeLogged ? 'text-orange-600' : 'text-red-600'}">收車 (Collection)</p>
                             ${isTimeLogged ? 
@@ -1480,11 +1333,7 @@
                                  )
                             }
                         </div>
-
-                        <!-- 客戶資訊 -->
                         ${customerInfo}
-
-                        <!-- 備註 -->
                         <div class="space-y-1 sm:col-span-2 border-t pt-2 mt-2">
                             <p class="font-medium text-gray-500">交車備註</p>
                             <p class="text-gray-900 whitespace-pre-wrap p-2 bg-gray-100 rounded">${record.notes || '無備註'}</p>
@@ -1496,20 +1345,16 @@
                 
                 recordsListContainer.appendChild(card);
             });
-
             if (filteredRecords.length === 0) {
                 noRecordsMessage.classList.remove('hidden');
             } else {
                  noRecordsMessage.classList.add('hidden');
             }
-
             updateScheduleTip();
         }
-
         /** 從 Firestore 監聽紀錄的實時更新 */
         function fetchRecords() {
             if (!db || !userId) return;
-
             const collectionRef = collection(db, getCollectionPath());
             
             // 使用 onSnapshot 實時監聽
@@ -1545,20 +1390,20 @@
             });
         }
         
-        // --- 日曆邏輯 (New) ---
-
+        // --- 日曆/排程邏輯 (還原 Grid) ---
         // 輔助函式：取得 date string 的日期部分
         function getDate(dateStr) {
             return new Date(dateStr + "T00:00:00");
         }
-
         // 輔助函式：計算兩個日期之間的天數
         function getDaysBetween(date1, date2) {
-            const diffTime = Math.abs(getDate(date2).getTime() - getDate(date1).getTime());
+            const date1Ms = getDate(date1).getTime();
+            const date2Ms = getDate(date2).getTime();
+            const diffTime = Math.abs(date2Ms - date1Ms);
             return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 包含頭尾兩天
         }
         
-        // 輔助函式：計算車牌的顏色索引 (New)
+        // 輔助函式：計算車牌的顏色索引
         function getPlateColor(plate) {
             let hash = 0;
             for (let i = 0; i < plate.length; i++) {
@@ -1567,146 +1412,208 @@
             const index = Math.abs(hash) % PLATE_COLORS.length;
             return PLATE_COLORS[index];
         }
-
-        // 渲染日曆排程長條 (新的核心邏輯)
+        
+        // 渲染日曆排程長條 (修正了軌道定位和行高計算/應用邏輯)
         function renderEventsOverlay(records) {
+            if (!Array.isArray(records)) return; 
             const overlay = document.getElementById('calendar-events-overlay');
             const grid = document.getElementById('calendar-grid');
             overlay.innerHTML = '';
             
-            if (grid.children.length === 0) return; // 避免在日曆還沒渲染時運行
-
-            const currentMonthStart = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1);
-            const currentMonthEnd = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 0);
+            if (grid.children.length === 0) return;
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            const currentMonthStart = new Date(year, month, 1);
+            const currentMonthEnd = new Date(year, month + 1, 0);
+            const firstDayOfMonth = currentMonthStart.getDay(); // 該月第一天是星期幾 (0=日)
+            const daysInMonth = currentMonthEnd.getDate();
             
-            // 過濾出所有有明確排程的週期 (無論是否完成結算，只要有 collectionDate/Time 就視為排程)
+            // 過濾出本月有排程的週期 (必須有排定收車時間)
             const visibleCycles = records.filter(r => 
-                r.collectionDate && r.collectionTime && r.deliveryDate && r.deliveryTime
+                r.collectionDate && r.collectionTime && r.deliveryDate && r.deliveryTime &&
+                (getDate(r.deliveryDate).getTime() <= currentMonthEnd.getTime()) &&
+                (getDate(r.collectionDate).getTime() >= currentMonthStart.getTime())
             );
             
-            // 建立一個追蹤器，用來安排事件在不同「軌道」（垂直位置）上，避免重疊
-            const trackOccupancy = []; // 每個元素代表一個星期，值為該星期的已佔用軌道數
-
+            // 1. 建立軌道追蹤器並計算 Track Map
+            let dateTrackMap = {}; // Key: YYYY-MM-DD, Value: [true, true, false, ...]
+            const eventHeight = 22; // 長條高度 + 垂直間距 (margin: 2px 0)
+            const dayNumberOffset = 24; // 日期數字的垂直空間 (padding-top: 24px)
+            const gridGap = 4; // Tailwind gap-1 = 4px
+            
+            // 計算長條佔用哪些軌道
             visibleCycles.forEach(record => {
                 const deliveryDate = getDate(record.deliveryDate);
                 const collectionDate = getDate(record.collectionDate);
-                const isCompleted = record.endMileage !== null; // 判斷是否已完成結算
                 
-                // 限制事件只在當前月份內顯示
-                const cycleStart = new Date(Math.max(deliveryDate.getTime(), currentMonthStart.getTime()));
-                const cycleEnd = new Date(Math.min(collectionDate.getTime(), currentMonthEnd.getTime()));
+                // 清空之前的 segments 資訊
+                record.segments = [];
                 
-                // 只有在週期開始日早於結束日（且在當月內）才繪製
-                if (cycleStart.getTime() > cycleEnd.getTime() && cycleEnd.getMonth() === currentCalendarDate.getMonth()) {
-                     return; 
-                }
+                // 處理跨週/跨月分段
+                let currentDate = new Date(Math.max(deliveryDate.getTime(), currentMonthStart.getTime()));
                 
-                // --- 取得簡短車牌顯示 ---
-                const shortPlateDisplay = getShortPlateDisplay(record.plate);
-                // --- 取得簡短車牌顯示結束 ---
-
-                // 決定長條顏色 (New)
-                const barColor = isCompleted ? '#9ca3af' : getPlateColor(record.plate); // 灰色或動態顏色
-
-                // 1. 找到事件的起始日對應的 Grid Index (從 0 開始計算)
-                const firstDayOfMonth = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth(), 1).getDay();
-                
-                let startDayOfMonth = cycleStart.getDate();
-                
-                // 計算相對於 Grid 頂部左上角 (Grid Item 0, 0) 的起始索引
-                let startIndex = startDayOfMonth - 1 + firstDayOfMonth; // 這是 Grid Item 的索引 (0-indexed)
-                
-                // 處理跨月開始的情況 (如果事件從上個月開始，索引是該月第一天的星期幾)
-                if (cycleStart.getMonth() !== currentCalendarDate.getMonth()) {
-                    startIndex = firstDayOfMonth; 
-                }
-                
-                // 2. 計算長條應該跨越多少天 (Spanning days)
-                let daysToSpan = getDaysBetween(getFormattedDate(cycleStart), getFormattedDate(cycleEnd));
-                
-                // 3. 確定事件所在的行 (Row) 和軌道 (Track)
-                let eventRow = Math.floor(startIndex / 7); // 事件起始行 (0-indexed)
-                let eventColStart = startIndex % 7 + 1;    // 事件起始欄 (1-indexed)
-                
-                
-                // 調整：如果事件從上個月開始，但開始日是星期日 (0)，則 startIndex=0
-                if (deliveryDate.getMonth() !== currentCalendarDate.getMonth() && firstDayOfMonth > 0) {
-                     eventColStart = 1; 
-                }
-
-                // 處理週邊界：確保長條不會超出當前週，並計算長條的長度
-                let daysRemainingInWeek = 7 - (startIndex % 7);
-                let actualSpanDays = Math.min(daysToSpan, daysRemainingInWeek);
-                
-                // 4. 尋找可用的軌道 (垂直位置)
-                
-                let eventHeight = 22; // 每個事件高度 22px
-                let currentTrackIndex = 0; // 當前事件在該日內的垂直位置 (0, 1, 2...)
-
-                // 查找該週的事件佔用情況
-                const weekKey = eventRow;
-                if (!trackOccupancy[weekKey]) {
-                    trackOccupancy[weekKey] = [false, false, false, false]; // 最多 4 條軌道
-                }
-
-                // 尋找該行中第一個空閒的軌道
-                for (let t = 0; t < trackOccupancy[weekKey].length; t++) {
-                    let isFree = true;
-                    // 檢查長條佔用的所有日子是否都空閒
-                    for (let d = 0; d < actualSpanDays; d++) {
-                        const dayIndex = startIndex + d;
-                        const dayDiv = grid.children[dayIndex];
-                        if (dayDiv && dayDiv.dataset.track && dayDiv.dataset.track.includes(t.toString())) {
-                             isFree = false;
-                             break;
-                        }
+                while (currentDate.getTime() <= collectionDate.getTime() && currentDate.getTime() <= currentMonthEnd.getTime()) {
+                    
+                    let segmentStart = new Date(currentDate);
+                    
+                    // 找到本段長條的結束點 (週末 or 週期結束 or 月份結束)
+                    const endOfWeek = new Date(segmentStart);
+                    endOfWeek.setDate(segmentStart.getDate() + (6 - segmentStart.getDay())); // 該週星期六的日期
+                    
+                    let segmentEnd = new Date(Math.min(collectionDate.getTime(), endOfWeek.getTime(), currentMonthEnd.getTime()));
+                    
+                    if (segmentStart.getTime() > segmentEnd.getTime()) {
+                         currentDate.setDate(currentDate.getDate() + 1);
+                         continue;
                     }
                     
-                    if (isFree) {
-                        currentTrackIndex = t;
-                        break;
+                    // 尋找空閒軌道 (檢查該長條所佔用的每一天)
+                    let track = 0;
+                    let isFree = false;
+                    
+                    let checkDate = new Date(segmentStart);
+                    let daysToCheck = [];
+                    while (checkDate.getTime() <= segmentEnd.getTime()) {
+                        daysToCheck.push(getFormattedDate(checkDate));
+                        checkDate.setDate(checkDate.getDate() + 1);
+                    }
+                    
+                    while (!isFree) {
+                        isFree = true;
+                        for (const dateStr of daysToCheck) {
+                            if (dateTrackMap[dateStr] && dateTrackMap[dateStr][track]) {
+                                isFree = false;
+                                break;
+                            }
+                        }
+                        if (!isFree) {
+                            track++;
+                        }
+                    }
+                    // 標記軌道佔用
+                    for (const dateStr of daysToCheck) {
+                        if (!dateTrackMap[dateStr]) {
+                            dateTrackMap[dateStr] = [];
+                        }
+                        dateTrackMap[dateStr][track] = true;
+                    }
+                    
+                    // 將軌道資訊儲存到 record 物件，以供後續渲染
+                    record.segments.push({
+                        track: track,
+                        start: getFormattedDate(segmentStart),
+                        end: getFormattedDate(segmentEnd)
+                    });
+
+                    // 移動到下一段的起始點
+                    currentDate = new Date(segmentEnd);
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            });
+            
+            // 2. 計算 Grid 行高並準備累積 Top Offset
+            const totalDaysInGrid = firstDayOfMonth + daysInMonth;
+            const rows = Math.ceil(totalDaysInGrid / 7);
+            let rowHeights = {};
+            let accumulatedTop = 0; // 累積 Top Offset
+            
+            for (let r = 0; r < rows; r++) {
+                let maxTracksInRow = 0;
+                
+                // 檢查本行的所有天數
+                for (let d = 0; d < 7; d++) {
+                    const dayIndexInMonth = (r * 7 + d) - firstDayOfMonth; 
+                    
+                    if (dayIndexInMonth >= 0 && dayIndexInMonth < daysInMonth) {
+                        const dateStr = getFormattedDate(new Date(year, month, dayIndexInMonth + 1));
+                        if (dateTrackMap[dateStr]) {
+                            // 計算實際佔用的軌道數量
+                            maxTracksInRow = Math.max(maxTracksInRow, dateTrackMap[dateStr].filter(t => t).length);
+                        }
                     }
                 }
                 
-                // 標記佔用
-                for (let d = 0; d < actualSpanDays; d++) {
-                    const dayIndex = startIndex + d;
+                // 計算該行所需高度 (24px 數字空間 + (軌道數 * 22px 事件高度) + 10px 底部間距)
+                const requiredEventHeight = dayNumberOffset + (maxTracksInRow * eventHeight) + 10;
+                // 確保最小高度為 80px (CSS 中 .calendar-day 的 min-height)
+                const rowHeight = Math.max(80, requiredEventHeight);
+                
+                // 儲存高度和累積 Top
+                rowHeights[r + 1] = { height: rowHeight, top: accumulatedTop }; // r+1 is gridRowStart
+                
+                // 應用到 Grid 行的 Day Div (main grid)
+                for (let d = 0; d < 7; d++) {
+                    const dayIndex = r * 7 + d;
                     const dayDiv = grid.children[dayIndex];
-                     if (dayDiv) {
-                        dayDiv.dataset.track = (dayDiv.dataset.track || '') + currentTrackIndex + ',';
+                    if (dayDiv) {
+                         dayDiv.style.minHeight = `${rowHeight}px`;
                     }
                 }
-
-                const eventTop = 24 + (currentTrackIndex * eventHeight);
-
-                // 5. 繪製事件長條
-                const eventBar = document.createElement('div');
-                eventBar.className = `event-bar pointer-events-auto`;
-                eventBar.style.backgroundColor = barColor; // 動態顏色設置
-                eventBar.setAttribute('onclick', `window.scrollToRecord('${record.id}');`);
-                eventBar.title = `${shortPlateDisplay}: ${record.deliveryLocation} -> ${record.collectionLocation} (${record.deliveryDate} ${record.deliveryTime} - ${record.collectionDate} ${record.collectionTime})`;
-
-                // 設置位置和跨度
-                eventBar.style.top = `${eventTop}px`;
-                eventBar.style.left = `calc(${((eventColStart - 1) / 7) * 100}% + 4px)`; // 計算起始位置 (加上左邊距 4px)
-                eventBar.style.width = `calc(${(actualSpanDays / 7) * 100}% - 8px)`; // 計算長度 (減去左右邊距 8px)
                 
-                // 設置行數 (row)
-                eventBar.style.gridRowStart = eventRow + 1;
-                eventBar.style.gridRowEnd = eventRow + 2;
-
-                const startDate = record.deliveryDate.substring(5).replace('-', '/');
-                const endDate = record.collectionDate.substring(5).replace('-', '/');
-                const content = `${shortPlateDisplay}: ${record.deliveryLocation} -> ${record.collectionLocation} (${startDate} ${record.deliveryTime} - ${endDate} ${record.collectionTime})`;
+                accumulatedTop += rowHeight + gridGap; // 加上 grid 之間的 4px gap
+            }
+            
+            // 3. 渲染長條 (使用儲存的 segment 資訊)
+            visibleCycles.forEach(record => {
+                const isCompleted = record.endMileage !== null; 
+                const barColor = isCompleted ? '#9ca3af' : getPlateColor(record.plate); 
+                const shortPlateDisplay = getShortPlateDisplay(record.plate);
                 
-                eventBar.textContent = content;
+                if (!record.segments) return;
                 
-                overlay.appendChild(eventBar);
-
+                record.segments.forEach(segment => {
+                    const segmentStart = getDate(segment.start);
+                    const segmentEnd = getDate(segment.end);
+                    const track = segment.track;
+                    
+                    // --- Grid 定位計算 (用於跨多日) ---
+                    const daysSinceMonthStart = (segmentStart.getTime() - currentMonthStart.getTime()) / (1000 * 60 * 60 * 24); 
+                    const totalDayIndex = daysSinceMonthStart + firstDayOfMonth; 
+                    
+                    let gridColStart = segmentStart.getDay() + 1; 
+                    let gridColEnd = segmentEnd.getDay() + 2; 
+                    
+                    const collectionDate = getDate(record.collectionDate);
+                    // 修正 1: 如果長條在該週末結束 (星期六)，且週期尚未結束，則 GridColEnd 應跨到下一行 (8)
+                    if (segmentEnd.getDay() === 6 && segmentEnd.getTime() < collectionDate.getTime()) {
+                        gridColEnd = 8;
+                    }
+                    
+                    const gridRowStart = Math.floor(totalDayIndex / 7) + 1;
+                    
+                    // --- 絕對 Top 位置計算 (修正垂直偏移) ---
+                    const eventRowInfo = rowHeights[gridRowStart];
+                    if (!eventRowInfo) return; 
+                    
+                    // 絕對 Top = 累積 Top (前幾行的總高) + 日期數字下緣 (24px) + 軌道偏移
+                    const absoluteTopOffset = eventRowInfo.top + dayNumberOffset + (track * eventHeight);
+                    
+                    // --- 繪製長條 ---
+                    const eventBar = document.createElement('div');
+                    eventBar.className = `event-bar`;
+                    eventBar.style.backgroundColor = barColor;
+                    eventBar.setAttribute('onclick', `window.scrollToRecord('${record.id}');`);
+                    eventBar.title = `${shortPlateDisplay}: ${record.deliveryLocation} -> ${record.collectionLocation} (${record.deliveryDate} ${record.deliveryTime} - ${record.collectionDate} ${record.collectionTime})`;
+                    
+                    // Grid 定位
+                    eventBar.style.gridColumn = `${gridColStart} / ${gridColEnd}`;
+                    // 注意：gridRowStart 必須設給絕對定位的元素，才能正確錨定長條在正確的行
+                    eventBar.style.gridRowStart = gridRowStart; 
+                    
+                    // 絕對定位
+                    eventBar.style.top = `${absoluteTopOffset}px`;
+                    eventBar.style.left = '4px'; // 4px padding/margin inside the cell
+                    eventBar.style.right = '4px';
+                    
+                    const deliveryLoc = record.deliveryLocation.substring(0, 4);
+                    const collectionLoc = record.collectionLocation.substring(0, 4);
+                    const content = `${shortPlateDisplay}: ${deliveryLoc} -> ${collectionLoc} (${record.deliveryDate.substring(5).replace('-', '/')} - ${record.collectionDate.substring(5).replace('-', '/')})`;
+                    eventBar.textContent = content;
+                    
+                    overlay.appendChild(eventBar);
+                });
             });
         }
-
-
         function renderCalendar() {
             if (!calendarGrid) return;
             
@@ -1719,29 +1626,28 @@
                 year: 'numeric',
                 month: 'long'
             });
-
             const todayStr = getFormattedDate(new Date());
-
             const year = currentCalendarDate.getFullYear();
             const month = currentCalendarDate.getMonth();
-
             // 1. 該月第一天是星期幾 (0=日, 1=一...)
             const firstDayOfMonth = new Date(year, month, 1).getDay();
             // 2. 該月總共有幾天
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-
             // 填充上個月的空白
             for (let i = 0; i < firstDayOfMonth; i++) {
                 const emptyDay = document.createElement('div');
                 emptyDay.className = "p-1 border border-gray-100 rounded-lg bg-gray-50";
                 calendarGrid.appendChild(emptyDay);
+                
+                // 為 Overlay 添加對應的空白 Grid Item (必須保持數量一致)
+                const emptyOverlay = document.createElement('div');
+                emptyOverlay.className = "relative pointer-events-none"; // Ensure it's a grid item
+                calendarEventsOverlay.appendChild(emptyOverlay);
             }
-
             // 填充本月日期
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
                 const dateStr = getFormattedDate(date);
-
                 const dayDiv = document.createElement('div');
                 // 每個格子需要相對定位來定位日期數字，但同時作為 Grid Item
                 dayDiv.className = `p-1 border border-gray-200 rounded-lg text-sm transition duration-150 calendar-day flex flex-col space-y-1 ${dateStr === todayStr ? 'bg-indigo-200 border-indigo-500' : 'bg-white'}`;
@@ -1753,9 +1659,13 @@
                 `;
                 
                 calendarGrid.appendChild(dayDiv);
+                // 為 Overlay 添加對應的 Grid Item (用於定位 absolute 長條，保持數量一致)
+                const overlayDay = document.createElement('div');
+                overlayDay.className = "relative pointer-events-none"; 
+                calendarEventsOverlay.appendChild(overlayDay);
             }
             
-            // 渲染排程長條 (使用獨立的事件渲染函式)
+            // 渲染排程長條 (新的邏輯會同時調整行高)
             renderEventsOverlay(allRecords); 
         }
         
@@ -1775,19 +1685,14 @@
         });
         document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
         document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
-
-
-        // --- END 日曆邏輯 ---
-
+        // --- END 日曆/排程邏輯 ---
         
         // --- 事件監聽器 ---
-
         document.addEventListener('DOMContentLoaded', () => {
             initFirebase();
             
             // 設置 Datalist 選項 (New)
             setupDatalistOptions();
-
             // 設置車牌選單
             const initialToday = new Date().toISOString().split('T')[0];
             const initialNowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
@@ -1804,7 +1709,6 @@
                 renderRecords(allRecords); // 重新渲染所有紀錄
             };
             document.getElementById('search-input').addEventListener('input', () => renderRecords(allRecords));
-
             // 排序按鈕切換
             sortButton.addEventListener('click', () => {
                 sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
@@ -1812,7 +1716,6 @@
                 sortButton.innerHTML = `<span id="sort-icon">${sortIcon.textContent}</span> 排序: 由${sortDirection === 'desc' ? '新到舊' : '舊到新'}`;
                 renderRecords(allRecords); // 重新渲染以應用新的排序
             });
-
             // 初始化日期輸入框為今天
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('record-date').value = today;
@@ -1821,7 +1724,6 @@
             const updateAvailability = () => {
                 const date = document.getElementById('record-date').value;
                 const time = document.getElementById('record-time').value;
-
                 if (date && time && allRecords.length > 0) {
                     const proposedDateTime = createDateTime(date, time);
                     const unavailablePlates = getUnavailablePlatesForTime(allRecords, proposedDateTime);
@@ -1838,10 +1740,8 @@
                 year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
             });
         });
-
         // IIFE End
         })();
-
     </script>
 </body>
 </html>
