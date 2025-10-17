@@ -224,6 +224,9 @@
             <!-- 查詢/排序控制項 -->
             <div class="flex flex-col sm:flex-row gap-4 mb-4">
                 <input type="text" id="search-input" placeholder="查詢：輸入地點、車牌、備註關鍵字" class="flex-grow p-2 border rounded-lg focus:border-indigo-500">
+                <button onclick="window.refreshRecords()" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-150 flex-shrink-0">
+                    🔄 重新整理
+                </button>
                 <button id="sort-button" class="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-150 flex-shrink-0">
                     <span id="sort-icon">📅</span> 排序: 由新到舊
                 </button>
@@ -1795,6 +1798,11 @@
             
             window.deleteLogRecord = deleteLogRecord; 
             
+            // 註冊重新整理和搜尋事件
+            window.refreshRecords = () => {
+                document.getElementById('search-input').value = ''; // 清空搜尋
+                renderRecords(allRecords); // 重新渲染所有紀錄
+            };
             document.getElementById('search-input').addEventListener('input', () => renderRecords(allRecords));
 
             // 排序按鈕切換
