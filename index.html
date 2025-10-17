@@ -1065,6 +1065,10 @@
             const todayStr = getFormattedDate(today);
             const tomorrowStr = getFormattedDate(tomorrow);
             const dayAfterTomorrowStr = getFormattedDate(dayAfterTomorrow); // D+2 string format
+            
+            // Helper function to convert YYYY-MM-DD to MM/DD
+            const getDisplayDate = (dateStr) => dateStr.substring(5).replace('-', '/');
+
 
             // 1. 今日收車: collectionDate = today 且 endMileage = null
             const todayCollections = allRecords.filter(record => 
@@ -1105,11 +1109,21 @@
                     const time = r[timeField];
                     const location = r[locationField];
                     
-                    // Determine Day Text
+                    // Determine Day Text and ADD DATE (FIXED)
                     const dateToCheck = (type === 'Delivery' ? r.deliveryDate : r.collectionDate);
-                    const dayText = (dateToCheck === todayStr) ? '今天' : 
-                                    (dateToCheck === tomorrowStr) ? '明天' : 
-                                    '後天'; 
+                    let dayText;
+                    
+                    if (dateToCheck === todayStr) {
+                        dayText = '今天';
+                    } else if (dateToCheck === tomorrowStr) {
+                        dayText = `明天 (${getDisplayDate(tomorrowStr)})`;
+                    } else if (dateToCheck === dayAfterTomorrowStr) {
+                        dayText = `後天 (${getDisplayDate(dayAfterTomorrowStr)})`;
+                    } else {
+                         // Should not happen with current filtering, but keep for robustness
+                         dayText = getDisplayDate(dateToCheck); 
+                    }
+                    
                     const typeText = (type === 'Delivery' ? '交車' : '收車');
 
                     const tipContent = `${dayText}有 <strong>1</strong> 筆${typeText}排程: ${plate}，時間：${time}，地點：${location}。`;
