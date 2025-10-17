@@ -28,6 +28,11 @@
         .modal-backdrop {
             background-color: rgba(0, 0, 0, 0.5);
         }
+        /* 確保卡片內部滾動 */
+        .modal-content-scroll {
+            max-height: calc(90vh - 100px); /* 90vh minus header/footer padding */
+            overflow-y: auto;
+        }
     </style>
     
     <!-- PWA / 行動裝置 App 介面設定 -->
@@ -137,35 +142,19 @@
                 </button>
             </div>
 
-            <!-- 紀錄表格容器 (恢復響應式表格) -->
-            <div class="log-container overflow-x-auto rounded-lg border border-gray-200">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <!-- 表格標頭：簡潔顯示 (4 欄位) -->
-                    <thead class="bg-gray-50 sticky top-0">
-                        <tr>
-                            <!-- 狀態欄位縮窄 -->
-                            <th class="px-1 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">狀態</th>
-                            <!-- 交車/收車時間 -->
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">交車 / 收車時間</th>
-                            <!-- 地點 (包含車牌) - 縮窄 padding -->
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地點</th>
-                            <!-- 操作欄位 -->
-                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">收車/操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
-                        <!-- 紀錄將會動態載入此處 -->
-                    </tbody>
-                </table>
-                <p id="no-records-message" class="text-center py-10 text-gray-500 hidden">目前沒有任何紀錄。</p>
+            <!-- 紀錄列表容器 (新 Card View) -->
+            <div id="records-list-container" class="space-y-4">
+                <!-- 紀錄將會動態載入此處 (Card View) -->
             </div>
+            
+            <p id="no-records-message" class="text-center py-10 text-gray-500 hidden">目前沒有任何紀錄。</p>
         </div>
 
     </div>
 
     <!-- 收車模態視窗 (Collection Modal) -->
     <div id="collection-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh] overflow-y-auto" id="collection-modal-content">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="collection-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4" id="modal-title"></h3>
             
             <p class="text-sm text-gray-600 mb-4">正在為 <span id="modal-plate-display" class="font-bold text-indigo-600"></span> 記錄資訊。</p>
@@ -211,7 +200,7 @@
     
     <!-- 編輯模態視窗 (Edit Modal - New) -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0 max-h-[90vh] overflow-y-auto" id="edit-modal-content">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="edit-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">編輯租賃週期紀錄</h3>
             
             <form id="edit-form">
@@ -371,7 +360,7 @@
         let sortDirection = 'desc'; // 'desc' (新到舊) 或 'asc' (舊到新)
 
         const messageBox = document.getElementById('message-box');
-        const recordsTableBody = document.getElementById('records-table-body');
+        const recordsListContainer = document.getElementById('records-list-container'); // 變更名稱為 List Container
         const noRecordsMessage = document.getElementById('no-records-message');
         const userIdDisplay = document.getElementById('user-id-display');
         const sortButton = document.getElementById('sort-button');
@@ -1038,14 +1027,14 @@
                     window.toggleDetails(recordId);
                 }
                 
-                // 2. 滾動到摘要行 (summaryRow)
-                const summaryRow = recordRow.previousElementSibling; 
-                if (summaryRow) {
-                    summaryRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // 2. 滾動到卡片 (summaryDiv)
+                const summaryDiv = document.getElementById(`summary-row-${recordId}`);
+                if (summaryDiv) {
+                    summaryDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     // 3. 短暫高亮
-                    summaryRow.classList.add('ring-4', 'ring-indigo-300');
+                    summaryDiv.classList.add('ring-4', 'ring-indigo-300');
                     setTimeout(() => {
-                        summaryRow.classList.remove('ring-4', 'ring-indigo-300');
+                        summaryDiv.classList.remove('ring-4', 'ring-indigo-300');
                     }, 1500);
                 }
             } else {
@@ -1163,9 +1152,9 @@
         }
 
 
-        /** 渲染紀錄列表 (點擊展開模式) */
+        /** 渲染紀錄列表 (Card View) */
         function renderRecords(records) {
-            recordsTableBody.innerHTML = '';
+            recordsListContainer.innerHTML = '';
             
             if (records.length === 0) {
                 noRecordsMessage.classList.remove('hidden');
@@ -1212,7 +1201,7 @@
 
                 if (isCompleted) {
                     statusHTML = `<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 font-semibold">已完成</span>`;
-                    actionButton = `<span class="ml-2 px-3 py-1 text-xs font-semibold text-green-700">完成結算</span>`;
+                    actionButton = `<span class="px-3 py-1 text-xs font-semibold text-green-700">完成結算</span>`;
                 } else if (isTimeLogged) {
                     // 待收車 (待登錄里程) - New vertical display
                     statusHTML = `
@@ -1222,134 +1211,148 @@
                         </div>
                     `;
                     actionMode = 'mileage';
-                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition duration-150">登錄里程</button>`;
+                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="px-3 py-1 text-xs font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition duration-150">登錄里程</button>`;
                 } else {
                     statusHTML = `<span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700 font-semibold">待收車</span>`;
                     actionMode = 'full';
-                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="ml-2 px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150">收車</button>`;
+                    actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150">收車</button>`;
                 }
                 
                 // 提取簡化的車牌號碼 (只取第一個空格前的部分)
                 const simplePlate = record.plate.split(' ')[0] || 'N/A';
 
-
-                // 1. 摘要行 (Summary Row)
-                const summaryRow = document.createElement('tr');
-                summaryRow.className = "cursor-pointer hover:bg-gray-50 transition duration-100 border-b border-gray-200";
-                summaryRow.onclick = (e) => {
-                    if (!e.target.closest('.action-cell')) {
+                // --- 1. 卡片摘要 DIV (Summary Row) ---
+                const card = document.createElement('div');
+                card.id = `summary-row-${recordId}`;
+                card.className = "bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden transition duration-150 hover:shadow-lg cursor-pointer ring-offset-2";
+                card.onclick = (e) => {
+                    // 避免點擊操作按鈕時觸發展開
+                    if (!e.target.closest('.action-controls')) {
                          window.toggleDetails(recordId);
                     }
                 };
+
+                const headerDiv = document.createElement('div');
+                headerDiv.className = "p-3 flex items-start justify-between border-b border-gray-100";
                 
-                // 渲染 4 個摘要欄位 + 1 個操作欄位
-                summaryRow.innerHTML = `
-                    <!-- 狀態欄位 (縮窄) -->
-                    <td class="px-1 py-3 whitespace-nowrap text-left">
-                        ${statusHTML}
-                    </td>
-                    <!-- 交車/收車時間 -->
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
-                        <!-- 交車資訊 -->
-                        ${record.deliveryDate} ${record.deliveryTime}
-                        <!-- 新增收車資訊 -->
-                        ${isCollectionScheduled ? 
-                            `<br><span class="text-xs text-gray-500">
-                                (收車 📥) ${record.collectionDate} ${record.collectionTime}
-                            </span>` 
-                            : ''}
-                    </td>
-                    <!-- 地點 (包含車牌) - 縮窄 padding，移除 "(車牌)" -->
-                    <td class="px-2 py-3 text-sm text-gray-900">
-                        ${record.deliveryLocation}
-                        <br>
-                        <span class="text-xs font-semibold text-indigo-600">
-                            ${simplePlate}
-                        </span>
-                    </td>
+                // 1.1 Status Block
+                const statusBlock = document.createElement('div');
+                statusBlock.className = "flex-shrink-0 text-center mr-3 leading-none self-center";
+                statusBlock.innerHTML = statusHTML;
+
+                // 1.2 Main Info (Time, Location, Plate) - UPDATED TO INCLUDE COLLECTION LOCATION
+                const infoDiv = document.createElement('div');
+                infoDiv.className = "flex-grow min-w-0 pr-2 space-y-1"; // Added space-y for better line spacing
+                infoDiv.innerHTML = `
+                    <!-- Line 1: Plate & Delivery Time -->
+                    <p class="text-base font-bold text-indigo-700 leading-tight">
+                        ${simplePlate}
+                    </p>
                     
-                    <!-- 展開/操作按鈕 -->
-                    <td class="px-3 py-3 whitespace-nowrap text-center action-cell">
-                        <div class="flex items-center justify-center space-x-2">
-                            <span id="expand-icon-${recordId}" class="text-xl text-indigo-500 cursor-pointer">▼</span>
-                            
-                            <!-- 編輯按鈕 (New Addition) -->
-                            <button onclick="window.openEditModal('${recordId}')" class="px-2 py-1 text-xs font-semibold text-gray-700 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition duration-150">編輯</button>
-
-                            <!-- 收車按鈕或完成標記 -->
-                            ${actionButton}
-
-                            <div class="delete-btn-container">
-                                <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150">刪除</button>
-                            </div>
-                        </div>
-                    </td>
+                    <!-- Line 2: Delivery Location/Time -->
+                    <p class="text-sm text-gray-900 leading-snug">
+                        交車: <span class="font-semibold">${record.deliveryDate.substring(5).replace('-', '/')} ${record.deliveryTime}</span>
+                        @ ${record.deliveryLocation}
+                    </p>
+                    
+                    <!-- Line 3/4: Collection Info (If Scheduled) -->
+                    ${isCollectionScheduled ? 
+                        `<p class="text-sm font-semibold text-orange-600 leading-snug">
+                            收車 📥: ${record.collectionDate.substring(5).replace('-', '/')} ${record.collectionTime}
+                            @ ${record.collectionLocation}
+                        </p>`
+                        : ''}
                 `;
-                recordsTableBody.appendChild(summaryRow);
+
+                // 1.3 Action Controls
+                const actionControls = document.createElement('div');
+                actionControls.className = "action-controls flex flex-col items-end space-y-1 ml-2 flex-shrink-0";
+                actionControls.innerHTML = `
+                    <span id="expand-icon-${recordId}" class="text-lg text-indigo-500 cursor-pointer">▼</span>
+                    <div class="flex space-x-1">
+                        <button onclick="window.openEditModal('${recordId}')" class="px-2 py-1 text-xs font-semibold text-gray-700 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition duration-150">編輯</button>
+                        ${actionButton}
+                        <button onclick="window.deleteLogRecord('${recordId}')" class="text-red-600 hover:text-red-900 transition duration-150 text-xs px-2 py-1">刪除</button>
+                    </div>
+                `;
+
+                headerDiv.appendChild(statusBlock);
+                headerDiv.appendChild(infoDiv);
+                headerDiv.appendChild(actionControls);
+                card.appendChild(headerDiv);
 
 
-                // 2. 詳細資訊行 (Detail Row) - 預設隱藏
-                const detailRow = document.createElement('tr');
-                detailRow.id = `detail-row-${recordId}`;
-                detailRow.className = "hidden bg-gray-100 border-b border-gray-300"; 
+                // --- 2. 詳細內容 DIV (Detail Row) - 預設隱藏 ---
+                const detailDiv = document.createElement('div');
+                detailDiv.id = `detail-row-${recordId}`;
+                detailDiv.className = "hidden p-3 bg-gray-50 border-t border-gray-200"; 
                 
                 // 處理客戶資訊顯示
                 const customerInfo = (record.customerName || record.customerPhone || record.customerDob) ? `
-                    <div class="space-y-1 sm:col-span-3 border-b pb-2 mb-2">
-                        <p class="font-bold text-lg text-gray-800">客戶資訊</p>
+                    <div class="space-y-1 sm:col-span-2 border-b pb-2 mb-3">
+                        <p class="font-bold text-base text-gray-800">客戶資訊</p>
                         <p><span class="font-medium text-gray-500">姓名:</span> ${record.customerName || '—'}</p>
                         <p><span class="font-medium text-gray-500">電話:</span> ${record.customerPhone || '—'}</p>
                         <p><span class="font-medium text-gray-500">生日:</span> ${record.customerDob || '—'}</p>
                     </div>
-                ` : `<div class="sm:col-span-3 border-b pb-2 mb-2"><p class="font-bold text-lg text-gray-800">客戶資訊: 無記錄</p></div>`;
+                ` : `<div class="sm:col-span-2 border-b pb-2 mb-3"><p class="font-bold text-base text-gray-800">客戶資訊: 無記錄</p></div>`;
 
 
-                // 詳細資訊欄位跨越 4 欄位 (配合新的 4 欄位結構)
-                detailRow.innerHTML = `
-                    <td colspan="4" class="p-4"> 
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700 p-3 border border-gray-300 rounded-lg shadow-inner bg-white">
-                            
-                            <!-- 客戶資訊 -->
-                            ${customerInfo}
-
-                            <!-- 租賃週期概要 -->
-                            <div class="space-y-1 sm:col-span-3 border-b pb-2 mb-2">
-                                <p class="font-bold text-lg text-gray-800">車輛: ${record.plate} (${record.etcId || '—'})</p>
-                            </div>
-
-                            <!-- 交車資訊 -->
-                            <div class="space-y-1 p-2 border rounded-lg bg-gray-50">
-                                <p class="font-bold text-green-700">交車 (Delivery)</p>
-                                <p><span class="font-medium text-gray-500">時間/地點:</span> ${record.deliveryDate} ${record.deliveryTime} / ${record.deliveryLocation}</p>
-                                <p><span class="font-medium text-gray-500">起始里程:</span> <span class="font-bold text-indigo-600">${record.startMileage ? record.startMileage.toLocaleString() : '—'} Km</span></p>
-                            </div>
-
-                            <!-- 收車資訊 -->
-                            <div class="space-y-1 p-2 border rounded-lg ${isCompleted ? 'bg-teal-50' : isTimeLogged ? 'bg-orange-50' : 'bg-red-50 sm:col-span-2'}">
-                                <p class="font-bold ${isCompleted ? 'text-teal-700' : isTimeLogged ? 'text-orange-600' : 'text-red-600'}">收車 (Collection)</p>
-                                ${isTimeLogged ? 
-                                    `<p><span class="font-medium text-gray-500">預計/實際時間:</span> ${record.collectionDate} ${record.collectionTime} / ${record.collectionLocation}</p>` :
-                                    `<p class="text-red-600 font-semibold">尚未記錄收車時間與地點。</p>`
-                                }
-                                ${isCompleted ? 
-                                     `<p><span class="font-medium text-gray-500">結束里程:</span> <span class="font-bold text-indigo-600">${record.endMileage ? record.endMileage.toLocaleString() : '—'} Km</span></p>
-                                     <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></p>` : 
-                                     (isTimeLogged ? 
-                                        `<p class="text-orange-600 font-semibold">里程待登錄，週期尚未結算。</p>` : ''
-                                     )
-                                }
-                            </div>
-
-                            <!-- 備註 -->
-                            <div class="space-y-1 sm:col-span-3">
-                                <p class="font-medium text-gray-500 border-t pt-2 mt-2">交車備註</p>
-                                <p class="text-gray-900 whitespace-pre-wrap">${record.notes || '無備註'}</p>
-                            </div>
+                // 組合詳細資訊內容
+                detailDiv.innerHTML = `
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
+                        
+                        <!-- 週期概要 -->
+                        <div class="space-y-1 sm:col-span-2 border-b pb-2 mb-2">
+                            <p class="font-bold text-lg text-gray-800">車輛: ${record.plate} (${record.etcId || '—'})</p>
                         </div>
-                    </td>
+
+                        <!-- 交車資訊 -->
+                        <div class="space-y-1 p-3 border rounded-lg bg-white shadow-sm">
+                            <p class="font-bold text-green-700">交車 (Delivery)</p>
+                            <p><span class="font-medium text-gray-500">時間/地點:</span> ${record.deliveryDate} ${record.deliveryTime} / ${record.deliveryLocation}</p>
+                            <p><span class="font-medium text-gray-500">起始里程:</span> <span class="font-bold text-indigo-600">${record.startMileage ? record.startMileage.toLocaleString() : '—'} Km</span></p>
+                        </div>
+
+                        <!-- 收車資訊 -->
+                        <div class="space-y-1 p-3 border rounded-lg ${isCompleted ? 'bg-teal-50 shadow-sm' : isTimeLogged ? 'bg-orange-50 shadow-sm' : 'bg-red-50 shadow-sm'}">
+                            <p class="font-bold ${isCompleted ? 'text-teal-700' : isTimeLogged ? 'text-orange-600' : 'text-red-600'}">收車 (Collection)</p>
+                            ${isTimeLogged ? 
+                                `<p><span class="font-medium text-gray-500">預計/實際時間:</span> ${record.collectionDate} ${record.collectionTime} / ${record.collectionLocation}</p>` :
+                                `<p class="text-red-600 font-semibold">尚未記錄收車時間與地點。</p>`
+                            }
+                            ${isCompleted ? 
+                                 `<p><span class="font-medium text-gray-500">結束里程:</span> <span class="font-bold text-indigo-600">${record.endMileage ? record.endMileage.toLocaleString() : '—'} Km</span></p>
+                                 <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></p>` : 
+                                 (isTimeLogged ? 
+                                    `<p class="text-orange-600 font-semibold">里程待登錄，週期尚未結算。</p>` : ''
+                                 )
+                            }
+                        </div>
+
+                        <!-- 客戶資訊 -->
+                        ${customerInfo}
+
+                        <!-- 備註 -->
+                        <div class="space-y-1 sm:col-span-2 border-t pt-2 mt-2">
+                            <p class="font-medium text-gray-500">交車備註</p>
+                            <p class="text-gray-900 whitespace-pre-wrap p-2 bg-gray-100 rounded">${record.notes || '無備註'}</p>
+                        </div>
+                    </div>
                 `;
-                recordsTableBody.appendChild(detailRow);
+                
+                card.appendChild(detailDiv);
+                
+                recordsListContainer.appendChild(card);
             });
+
+            if (filteredRecords.length === 0) {
+                noRecordsMessage.classList.remove('hidden');
+            } else {
+                 noRecordsMessage.classList.add('hidden');
+            }
+
+            updateScheduleTip();
         }
 
         /** 從 Firestore 監聽紀錄的實時更新 */
