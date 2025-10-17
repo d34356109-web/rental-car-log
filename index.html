@@ -33,6 +33,11 @@
             max-height: calc(90vh - 100px); /* 90vh minus header/footer padding */
             overflow-y: auto;
         }
+        /* 針對日文車牌的換行問題進行修正 */
+        .plate-fix {
+            word-break: break-all;
+            /* 允許長字串在不破壞佈局的情況下換行 */
+        }
     </style>
     
     <!-- PWA / 行動裝置 App 介面設定 -->
@@ -1233,7 +1238,8 @@
                 };
 
                 const headerDiv = document.createElement('div');
-                headerDiv.className = "p-3 flex items-start justify-between border-b border-gray-100";
+                // 修正佈局：確保 statusBlock, infoDiv, actionControls 是橫向排列且不會換行，使用 flex-nowrap
+                headerDiv.className = "p-3 flex items-start justify-between border-b border-gray-100 flex-nowrap"; 
                 
                 // 1.1 Status Block
                 const statusBlock = document.createElement('div');
@@ -1242,10 +1248,11 @@
 
                 // 1.2 Main Info (Time, Location, Plate) - UPDATED TO INCLUDE COLLECTION LOCATION
                 const infoDiv = document.createElement('div');
-                infoDiv.className = "flex-grow min-w-0 pr-2 space-y-1"; // Added space-y for better line spacing
+                // 修正佈局：使用 flex-col 讓內部資訊垂直堆疊，min-w-0 讓它在 flex 容器中可以縮小
+                infoDiv.className = "flex-grow min-w-0 pr-2 space-y-0.5 flex flex-col justify-center"; 
                 infoDiv.innerHTML = `
-                    <!-- Line 1: Plate - ADDED break-all for long string wrapping -->
-                    <p class="text-base font-bold text-indigo-700 leading-tight break-all min-w-0">
+                    <!-- Line 1: Plate - ADDED plate-fix CSS to help long string wrapping -->
+                    <p class="text-base font-bold text-indigo-700 leading-tight plate-fix min-w-0">
                         ${simplePlate}
                     </p>
                     
