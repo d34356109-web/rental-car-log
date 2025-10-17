@@ -729,7 +729,7 @@
                 document.getElementById('end-mileage').required = true;
                 
             } else {
-                // --- 模式 1: 記錄收車時間/地點 (full) ---
+                // --- 模式 1: 記錄時間/地點 (full) ---
                 modalTitle.textContent = '記錄收車時間與地點';
                 document.getElementById('collection-submit-btn').textContent = '確認並儲存收車時間';
 
@@ -995,11 +995,28 @@
         // --- END 車輛防呆邏輯 ---
 
 
-        /** 獲取簡化的車牌號碼 (例如: 7777, 8888, 40系) */
-        function getSimplifiedPlate(fullPlate) {
-            // 由於用戶要求還原到完整顯示，此函式不再需要簡化，但為安全和未來需求，暫時返回完整車牌
+        /** 獲取簡化的車牌號碼 */
+        function getShortPlateDisplay(fullPlate) {
+            // 規則 1: 成田331わ7777 總統座 -> 7777 總統座
+            if (fullPlate.includes('成田331わ7777')) {
+                return '7777 總統座';
+            }
+            // 規則 2: なにわ334わ8888 40系 -> 8888 40系
+            if (fullPlate.includes('なにわ334わ8888')) {
+                return '8888 40系';
+            }
+            // 規則 3: 成田331わ88 4WD 8座 -> 88 4WD 8座
+            if (fullPlate.includes('成田331わ88')) {
+                return '88 4WD 8座';
+            }
+            // 規則 4: 和泉330わ3333 7座 中文導航 -> 3333 7座
+            if (fullPlate.includes('和泉330わ3333')) {
+                return '3333 7座';
+            }
+            // Fallback: 如果不符合上述規則，則返回完整車牌
             return fullPlate;
         }
+
 
         /** 設置地點 Datalist 選項 (New) */
         function setupDatalistOptions() {
@@ -1105,7 +1122,7 @@
                 const locationField = (type === 'Delivery' ? 'deliveryLocation' : 'collectionLocation');
 
                 return records.map(r => {
-                    const plate = getSimplifiedPlate(r.plate); // 使用完整車牌
+                    const plate = getShortPlateDisplay(r.plate); // 使用簡短車牌顯示
                     const time = r[timeField];
                     const location = r[locationField];
                     
@@ -1229,8 +1246,8 @@
                     actionButton = `<button onclick="window.openCollectionModal('${recordId}', '${actionMode}')" class="px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-150">收車</button>`;
                 }
                 
-                // 提取完整的車牌號碼 (已還原)
-                const fullPlateDisplay = record.plate;
+                // 提取簡短的車牌顯示 (新需求)
+                const shortPlateDisplay = getShortPlateDisplay(record.plate);
 
                 // --- 1. 卡片摘要 DIV (Summary Row) ---
                 const card = document.createElement('div');
@@ -1258,9 +1275,9 @@
                 infoDiv.className = "flex-grow min-w-0 px-2 space-y-0.5"; 
                 
                 infoDiv.innerHTML = `
-                    <!-- Line 1: Plate -->
+                    <!-- Line 1: Plate - 使用簡短顯示 -->
                     <p class="text-base font-bold text-indigo-700 leading-tight plate-fix min-w-0">
-                        ${fullPlateDisplay}
+                        ${shortPlateDisplay}
                     </p>
                     
                     <!-- Line 2: Delivery Info -->
