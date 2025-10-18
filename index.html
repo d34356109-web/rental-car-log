@@ -477,7 +477,7 @@
         const plateSelect = document.getElementById('record-plate');
         // 地點元素現在是 Input (透過 list 屬性連接 datalist)
         const locationSelect = document.getElementById('record-location'); 
-        const collectionLocationSelect = document.getElementById('collection-location'); 
+        const collectionLocationInput = document.getElementById('collection-location'); // 修正 ID 引用
         
         // 日曆元素 (已還原)
         const calendarContainer = document.getElementById('calendar-container');
@@ -1033,7 +1033,7 @@
                             }
                             ${isCompleted ? 
                                  `<p><span class="font-medium text-gray-500">結束里程:</span> <span class="font-bold text-indigo-600">${record.endMileage ? record.endMileage.toLocaleString() : '—'} Km</span></p>
-                                 <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></span></p>` : 
+                                 <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></p>` : 
                                  (isTimeLogged ? 
                                     `<p class="text-orange-600 font-semibold">里程待登錄，週期尚未結算。</p>` : ''
                                  )
@@ -1826,9 +1826,6 @@
             document.getElementById('modal-start-mileage').textContent = record.startMileage ? record.startMileage.toLocaleString() : '0';
             modalModeInput.value = mode;
 
-            // 設置收車地點 Input 值
-            collectionLocationInput.value = record.collectionLocation || '';
-
             // 清除上次的輸入值
             endMileageInput.value = ''; 
             
@@ -1859,6 +1856,11 @@
                 // 里程是必填
                 endMileageInput.required = true;
                 
+                // 修正：在里程模式下，避免載入舊的日期/地點值
+                collectionDateInput.value = ''; 
+                collectionTimeInput.value = '';
+                collectionLocationInput.value = '';
+                
             } else {
                 // --- 模式 1: 記錄時間/地點 (full) ---
                 modalTitle.textContent = '記錄收車時間與地點';
@@ -1872,9 +1874,11 @@
                 // 預設日期和時間
                 const today = new Date().toISOString().split('T')[0];
                 const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
-                collectionDateInput.value = record.collectionDate || today;
-                collectionTimeInput.value = record.collectionTime || nowTime;
                 
+                // **核心修正:** 確保這裡使用 record.collectionDate/Time/Location 的值
+                collectionDateInput.value = record.collectionDate || today; 
+                collectionTimeInput.value = record.collectionTime || nowTime;
+                collectionLocationInput.value = record.collectionLocation || ''; // 載入已有的地點
             }
 
             // 顯示模態視窗
