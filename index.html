@@ -144,7 +144,7 @@
         <div class="bg-white p-6 shadow-xl rounded-xl mb-10">
             <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">新增「交車」紀錄 (開啟新租賃週期)</h2>
             
-            <button id="open-fleet-modal" type="button" class="mb-4 px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transition duration-150 flex items-center">
+            <button id="open-fleet-modal" type="button" onclick="window.openFleetModal()" class="mb-4 px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transition duration-150 flex items-center">
                 ⚙️ 管理車隊 (新增/編輯車牌)
             </button>
 
@@ -1019,7 +1019,7 @@
         }
 
 
-        // --- 其他輔助函式 (initFirebase, getCollectionPath, etc.) 保持不變 ---
+        // --- 其他輔助函式 (initFirebase, getCollectionPath, etc.) 保持不變) ---
         
         /** 渲染日曆排程長條 (Grid 佈局) */
         function renderEventsOverlay(records) {
@@ -1537,7 +1537,7 @@
         async function addRecord(event) {
             event.preventDefault();
             if (!db || !userId) {
-                displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
+                displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。", 'error');
                 return;
             }
 
@@ -2004,6 +2004,36 @@
         
         document.getElementById('edit-form').addEventListener('submit', submitEditUpdate);
         // --- END 編輯模態視窗邏輯 ---
+
+        // --- 車隊管理模態視窗邏輯 (New) ---
+        function openFleetModal() {
+            const modal = document.getElementById('fleet-modal');
+            const modalContent = document.getElementById('fleet-modal-content');
+            
+            // 顯示模態視窗
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            renderFleetList(); // 重新渲染列表以確保最新狀態
+        }
+
+        function closeFleetModal() {
+            const modal = document.getElementById('fleet-modal');
+            const modalContent = document.getElementById('fleet-modal-content');
+            
+            // 隱藏模態視窗
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('new-plate-form').reset();
+            }, 300);
+        }
+        window.openFleetModal = openFleetModal; // 暴露給全局作用域
+        window.closeFleetModal = closeFleetModal; // 暴露給全局作用域
+        
+        // --- END 車隊管理模態視窗邏輯 ---
 
 
         
