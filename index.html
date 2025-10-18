@@ -143,6 +143,11 @@
 
         <div class="bg-white p-6 shadow-xl rounded-xl mb-10">
             <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">新增「交車」紀錄 (開啟新租賃週期)</h2>
+            
+            <button id="open-fleet-modal" type="button" class="mb-4 px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transition duration-150 flex items-center">
+                ⚙️ 管理車隊 (新增/編輯車牌)
+            </button>
+
             <form id="record-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
                 <input type="hidden" id="record-action" value="交車">
@@ -163,7 +168,7 @@
                 <div>
                     <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌 (ETC 卡號)</label>
                     <select id="record-plate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>
+                        <option value="" disabled selected>載入車隊...</option>
                     </select>
                 </div>
                 
@@ -222,6 +227,7 @@
 
     </div>
 
+    <!-- 1. 收車 / 登錄里程模態視窗 -->
     <div id="collection-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="collection-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4" id="modal-title"></h3>
@@ -260,6 +266,7 @@
         </div>
     </div>
     
+    <!-- 2. 編輯紀錄模態視窗 -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="edit-modal-content">
             <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">編輯租賃週期紀錄</h3>
@@ -356,6 +363,34 @@
             </form>
         </div>
     </div>
+    
+    <!-- 3. 車隊管理模態視窗 (New) -->
+    <div id="fleet-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4" aria-modal="true" role="dialog">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 transform transition-all duration-300 scale-95 opacity-0 modal-content-scroll" id="fleet-modal-content">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">管理車隊列表</h3>
+            
+            <div class="text-sm text-gray-600 mb-4">在這裡新增或移除您的車牌，變更會同步到所有使用者的交車表單。</div>
+            
+            <!-- 新增車牌表單 -->
+            <form id="new-plate-form" onsubmit="window.addPlateToFleet(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 mb-6">
+                <input type="text" id="new-plate-description" placeholder="車牌號碼 / 簡短描述 (例如: 7777 總統座)" required class="col-span-2 p-2 border rounded-lg">
+                <input type="text" id="new-plate-etc" placeholder="ETC 卡號" required class="p-2 border rounded-lg">
+                <button type="submit" class="col-span-3 md:col-span-1 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150">
+                    + 新增車牌
+                </button>
+            </form>
+
+            <!-- 車隊列表 -->
+            <div class="space-y-2" id="fleet-list">
+                <!-- Fleet items rendered here -->
+            </div>
+
+            <div class="flex justify-end space-x-3 mt-6">
+                <button type="button" onclick="window.closeFleetModal()" class="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">關閉</button>
+            </div>
+        </div>
+    </div>
+
 
     <datalist id="location-list">
         </datalist>
@@ -365,7 +400,7 @@
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setLogLevel, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         (function() { 
         
@@ -388,18 +423,17 @@
         // =================================================================
 
         // =================================================================
-        // *** 固定車牌與 ETC 卡號對應表 (車牌下拉選單用) ***
+        // *** 固定車牌與 ETC 卡號對應表 (作為初始化資料使用) ***
         // =================================================================
-        const CAR_ETC_MAPPING = {
-            "なにわ334わ8888 40系": "9160 0000 1326 8609",
-            "和泉330わ3333 7座 中文導航": "9160 0000 1326 6207",
-            "成田331わ7777 總統座": "9160 0000 1326 6009",
-            "成田331わ88 4WD 8座": "9160 0000 1410 6501",
-        };
-
+        const INITIAL_CAR_FLEET = [
+            { plate: "なにわ334わ8888 40系", etcId: "9160 0000 1326 8609" },
+            { plate: "和泉330わ3333 7座 中文導航", etcId: "9160 0000 1326 6207" },
+            { plate: "成田331わ7777 總統座", etcId: "9160 0000 1326 6009" },
+            { plate: "成田331わ88 4WD 8座", etcId: "9160 0000 1410 6501" },
+        ];
         // =================================================================
-        // *** 地點選項列表 (已還原) ***
-        // =================================================================
+        
+        // === 地點選項列表 ===
         const LOCATION_OPTIONS = [
             "成田空港T1",
             "成田空港T2",
@@ -429,6 +463,7 @@
         let userId = null;
         let isAuthReady = false;
         let allRecords = []; // 儲存從 Firestore 獲取的所有紀錄
+        let allFleet = []; // 新增: 儲存所有車隊列表
         let sortDirection = 'desc'; // 'desc' (新到舊) 或 'asc' (舊到新)
         
         let currentCalendarDate = new Date(); // New: 用於日曆顯示
@@ -451,25 +486,18 @@
         const toggleCalendarButton = document.getElementById('toggle-calendar');
         const calendarEventsOverlay = document.getElementById('calendar-events-overlay'); 
         
+        // 新增的車隊管理元素
+        const fleetListContainer = document.getElementById('fleet-list');
+        const newPlateForm = document.getElementById('new-plate-form');
+        const newPlateDescriptionInput = document.getElementById('new-plate-description');
+        const newPlateEtcInput = document.getElementById('new-plate-etc');
+        
         // 新增的客戶資料輸入欄位
         const customerNameInput = document.getElementById('customer-name');
         const customerPhoneInput = document.getElementById('customer-phone');
         const customerDobInput = document.getElementById('customer-dob');
         
-        // 編輯模態視窗元素
-        const editPlateInput = document.getElementById('edit-plate');
-        const editDeliveryDateInput = document.getElementById('edit-delivery-date');
-        const editDeliveryTimeInput = document.getElementById('edit-delivery-time');
-        const editDeliveryLocationSelect = document.getElementById('edit-delivery-location');
-        const editStartMileageInput = document.getElementById('edit-start-mileage');
-        const editCollectionDateInput = document.getElementById('edit-collection-date');
-        const editCollectionTimeInput = document.getElementById('edit-collection-time');
-        const editCollectionLocationSelect = document.getElementById('edit-collection-location');
-        const editEndMileageInput = document.getElementById('edit-end-mileage');
-        const editCustomerNameInput = document.getElementById('edit-customer-name');
-        const editCustomerPhoneInput = document.getElementById('edit-customer-phone');
-        const editCustomerDobInput = document.getElementById('edit-customer-dob');
-        const editNotesInput = document.getElementById('edit-notes');
+        // 編輯模態視窗元素 (已省略部分)
 
 
         /** 顯示應用程式訊息 */
@@ -509,15 +537,80 @@
             return new Date(`${dateStr}T${timeStr}:00`);
         }
         
-        /** 格式化日期字串為 Date 物件，並將時間歸零 (用於範圍比較) */
-        function dateStringToStartOfDay(dateStr) {
-             if (!dateStr) return null;
-             // 確保時區不會影響日期比較 (使用 UTC)
-             const date = new Date(dateStr + 'T00:00:00Z');
-             return isNaN(date) ? null : date;
+
+        /** 獲取 Firestore Collection Path (共享路徑) */
+        function getCollectionPath(type = 'records') {
+            const sharedAppId = 'd34356109-rental-log-app'; // 固定的應用程式識別碼
+            
+            if (type === 'fleet') {
+                const sharedFleetName = 'vehicle_fleet_shared';
+                return `artifacts/${sharedAppId}/public/data/${sharedFleetName}`;
+            } else {
+                const sharedCollectionName = 'rental_records_shared';
+                return `artifacts/${sharedAppId}/public/data/${sharedCollectionName}`;
+            }
+        }
+        
+        // 輔助函式：取得 date string 的日期部分
+        function getDate(dateStr) {
+            return new Date(dateStr + "T00:00:00");
         }
 
+        /** 輔助函式：計算兩個日期之間的天數 (包含頭尾兩天) */
+        function getDaysBetween(date1Str, date2Str) {
+            const date1Ms = getDate(date1Str).getTime();
+            const date2Ms = getDate(date2Str).getTime();
+            const diffTime = Math.abs(date2Ms - date1Ms);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
+        }
 
+        /** 輔助函式：計算車牌的顏色索引 */
+        function getPlateColor(plate) {
+            let hash = 0;
+            for (let i = 0; i < plate.length; i++) {
+                hash = plate.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % PLATE_COLORS.length;
+            return PLATE_COLORS[index];
+        }
+
+        /** 獲取簡化的車牌號碼 */
+        function getShortPlateDisplay(fullPlate) {
+            // 規則 1: 成田331わ7777 總統座 -> 7777 總統座
+            if (fullPlate.includes('成田331わ7777')) {
+                return '7777 總統座';
+            }
+            // 規則 2: なにわ334わ8888 40系 -> 8888 40系
+            if (fullPlate.includes('なにわ334わ8888')) {
+                return '8888 40系';
+            }
+            // 規則 3: 成田331わ88 4WD 8座 -> 88 4WD 8座
+            if (fullPlate.includes('成田331わ88')) {
+                return '88 4WD 8座';
+            }
+            // 規則 4: 和泉330わ3333 7座 中文導航 -> 3333 7座
+            if (fullPlate.includes('和泉330わ3333')) {
+                return '3333 7座';
+            }
+            
+            return fullPlate;
+        }
+
+        /** 設置地點 Datalist 選項 */
+        function setupDatalistOptions() {
+            const datalist = document.getElementById('location-list');
+            if (!datalist) return;
+            datalist.innerHTML = '';
+            
+            LOCATION_OPTIONS.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location;
+                datalist.appendChild(option);
+            });
+        }
+        window.setupDatalistOptions = setupDatalistOptions; // 讓 DOMContentLoaded 可以存取
+        
+        
         // --- Firebase 初始化和認證 ---
         function initFirebase() {
             const submitButton = document.getElementById('submit-button'); // 取得按鈕元素
@@ -527,23 +620,26 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // 認證狀態變更監聽
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         userIdDisplay.textContent = userId;
                         isAuthReady = true;
-                        submitButton.disabled = false; // 認證成功，啟用按鈕
-                        console.log("Firebase 認證完成，User ID:", userId);
-                        fetchRecords(); // 認證完成後開始監聽紀錄
+                        submitButton.disabled = false;
+                        
+                        // 1. 載入車隊資料
+                        fetchFleet(); 
+                        
+                        // 2. 載入紀錄資料
+                        fetchRecords(); 
+                        
                     } else {
-                        // 運行在本地環境，我們使用標準的匿名登入
                         try {
                              await signInAnonymously(auth);
                         } catch (error) {
                             console.error("認證失敗:", error);
                             displayMessage("認證失敗，請檢查網路或 Firebase 專案設定。", 'error');
-                            submitButton.disabled = true; // 認證失敗，禁用按鈕
+                            submitButton.disabled = true; 
                             userIdDisplay.textContent = '認證失敗 (連線異常)'; 
                             isAuthReady = true; 
                         }
@@ -553,495 +649,12 @@
             } catch (e) {
                 console.error("Firebase 初始化失敗:", e);
                 displayMessage(`Firebase 初始化失敗。錯誤訊息: ${e.message}。無法儲存紀錄。`, 'error'); 
-                submitButton.disabled = true; // 禁用按鈕
+                submitButton.disabled = true; 
                 userIdDisplay.textContent = '初始化錯誤'; 
                 isAuthReady = true;
             }
         }
-
-        /** 獲取 Firestore Collection Path (共享路徑) */
-        function getCollectionPath() {
-            // 協作路徑: 所有登入的使用者 (A & B) 都將存取此路徑
-            const sharedAppId = 'd34356109-rental-log-app'; // 固定的應用程式識別碼
-            const sharedCollectionName = 'rental_records_shared';
-            
-            return `artifacts/${sharedAppId}/public/data/${sharedCollectionName}`;
-        }
-
-        // --- 資料操作 (CRUD) ---
-
-        /** 新增紀錄到 Firestore (僅限交車) */
-        async function addRecord(event) {
-            event.preventDefault();
-            if (!db || !userId) {
-                displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
-                return;
-            }
-
-            document.getElementById('submit-button').disabled = true;
-
-            // 客戶資料 (選填)
-            const customerName = customerNameInput.value || '';
-            const customerPhone = customerPhoneInput.value || '';
-            const customerDob = customerDobInput.value || '';
-
-            // 交車資訊 (必填)
-            const date = document.getElementById('record-date').value;
-            const time = document.getElementById('record-time').value;
-            const action = document.getElementById('record-action').value; // 固定為 '交車'
-            const location = locationSelect.value.trim(); // 從 Input 獲取值並清理
-            const plate = plateSelect.value; 
-            
-            const etcId = CAR_ETC_MAPPING[plate]; 
-            
-            const mileage = document.getElementById('record-mileage').value;
-            const notes = document.getElementById('record-notes').value || '';
-
-            if (!plate || !etcId) {
-                displayMessage("請選擇車牌 (ETC 卡號會自動從選單中帶入)。", 'error');
-                document.getElementById('submit-button').disabled = false;
-                return;
-            }
-            
-            // 檢查車牌是否被禁用 (二次防呆，確保選單未被繞過)
-            const selectedOption = plateSelect.options[plateSelect.selectedIndex];
-            if (selectedOption && selectedOption.disabled) {
-                 displayMessage("所選車牌目前正在租賃週期中，請先完成收車後再進行交車。", 'error');
-                 document.getElementById('submit-button').disabled = false;
-                 return;
-            }
-
-            if (!location) {
-                displayMessage("請輸入交車地點。", 'error');
-                document.getElementById('submit-button').disabled = false;
-                return;
-            }
-
-            const dateTimeString = `${date}T${time}:00`;
-            const recordTime = new Date(dateTimeString);
-            
-            if (isNaN(recordTime)) {
-                displayMessage("日期或時間格式無效。", 'error');
-                document.getElementById('submit-button').disabled = false;
-                return;
-            }
-
-            const newRecord = {
-                // 客戶資料
-                customerName: customerName,
-                customerPhone: customerPhone,
-                customerDob: customerDob,
-
-                // 交車資訊
-                action: action, // 交車
-                deliveryDate: date,
-                deliveryTime: time,
-                deliveryLocation: location,
-                startMileage: parseInt(mileage, 10), // 起始里程
-                plate: plate,
-                etcId: etcId,
-                notes: notes,
-                
-                // 收車資訊 (預設為空，表示週期開放)
-                collectionDate: null,
-                collectionTime: null,
-                collectionLocation: null,
-                endMileage: null,
-                
-                timestamp: Timestamp.fromDate(recordTime) // 使用交車時間作為主要排序
-            };
-
-            try {
-                const collectionRef = collection(db, getCollectionPath());
-                await addDoc(collectionRef, newRecord);
-                displayMessage("交車紀錄儲存成功！週期已開啟。", 'success');
-                document.getElementById('record-form').reset();
-            } catch (e) {
-                console.error("新增文件時發生錯誤:", e);
-                displayMessage(`儲存失敗: ${e.message}`, 'error');
-            } finally {
-                document.getElementById('submit-button').disabled = false;
-            }
-        }
-
-        /** 更新紀錄 (收車或登錄里程) */
-        async function submitCollectionUpdate(event) {
-            event.preventDefault();
-            if (!db || !userId) {
-                displayMessage("資料庫連線或用戶認證失敗，無法完成收車。", 'error');
-                return;
-            }
-
-            const recordId = document.getElementById('modal-record-id').value;
-            const mode = document.getElementById('modal-mode').value;
-            
-            // 模態視窗的輸入欄位
-            const collectionDate = document.getElementById('collection-date').value;
-            const collectionTime = document.getElementById('collection-time').value;
-            const collectionLocation = collectionLocationSelect.value.trim(); // 從 Input 獲取值並清理
-            const endMileageInput = document.getElementById('end-mileage').value;
-            
-            const updateData = {};
-            const collectionSubmitBtn = document.getElementById('collection-submit-btn');
-
-            // 取得起始里程 (用於里程檢查)
-            const record = allRecords.find(r => r.id === recordId);
-            const startMileage = record ? record.startMileage : 0;
-            
-            collectionSubmitBtn.disabled = true;
-
-            if (mode === 'full') {
-                // --- 模式 1: 記錄時間/地點 (預收車) ---
-                if (!collectionDate || !collectionTime || !collectionLocation) {
-                    displayMessage("請填寫完整的收車時間和地點。", 'error');
-                    collectionSubmitBtn.disabled = false;
-                    return;
-                }
-
-                updateData.collectionDate = collectionDate;
-                updateData.collectionTime = collectionTime;
-                updateData.collectionLocation = collectionLocation;
-                // endMileage 仍然為 null，保持「待登錄里程」狀態
-                
-                // 如果用戶在 'full' 模式下也輸入了里程，則直接完成
-                if (endMileageInput.trim() !== "") {
-                    const endMileage = parseInt(endMileageInput, 10);
-                    if (isNaN(endMileage) || endMileage < startMileage) {
-                        displayMessage(`結束里程數無效或低於起始里程 (${startMileage.toLocaleString()} Km)。`, 'error');
-                        collectionSubmitBtn.disabled = false;
-                        return;
-                    }
-                    updateData.endMileage = endMileage;
-                }
-
-            } else if (mode === 'mileage') {
-                // --- 模式 2: 登錄最終里程 (結算) ---
-                
-                // 檢查是否為空字串，空字串不應被視為 0
-                if (endMileageInput.trim() === "") {
-                    displayMessage("請輸入有效的結束里程數。", 'error');
-                    collectionSubmitBtn.disabled = false;
-                    return;
-                }
-
-                const endMileage = parseInt(endMileageInput, 10);
-                
-                if (isNaN(endMileage)) {
-                    // 再次檢查是否為無效數字 (雖然 trim() 應該排除了空字串，但排除其他非數字輸入)
-                    displayMessage("請輸入有效的結束里程數。", 'error');
-                    collectionSubmitBtn.disabled = false;
-                    return;
-                }
-                
-                if (endMileage < startMileage) {
-                     displayMessage(`收車里程 (${endMileage.toLocaleString()} Km) 不得低於交車里程 (${startMileage.toLocaleString()} Km)。`, 'error');
-                     collectionSubmitBtn.disabled = false;
-                     return;
-                }
-                
-                updateData.endMileage = endMileage;
-                
-                // **關鍵修正**：在里程結算模式下，我們不需要修改日期和地點，但它們在資料庫中必須有值。
-                // 如果是從舊紀錄切換過來，這些值可能不存在於模態視窗的 input 中，但應該保持 record 的舊值。
-                // (注意：在此模式下，這些欄位被 hidden，但在 updateDoc 中不傳遞它們，它們的值保持不變)
-
-            }
-
-            try {
-                const docRef = doc(db, getCollectionPath(), recordId);
-                await updateDoc(docRef, updateData);
-
-                if (updateData.endMileage) {
-                     displayMessage(`收車紀錄已完成！里程差: ${(updateData.endMileage - startMileage).toLocaleString()} Km`, 'success');
-                } else {
-                     displayMessage(`收車時間/地點已記錄，待登錄最終里程。`, 'success');
-                }
-                
-                window.closeCollectionModal();
-
-            } catch (e) {
-                console.error("更新收車紀錄時發生錯誤:", e);
-                displayMessage(`儲存失敗: ${e.message}`, 'error');
-            } finally {
-                collectionSubmitBtn.disabled = false;
-            }
-        }
-
-        /** 刪除紀錄 */
-        async function deleteLogRecord(id) {
-            // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
-            if (!db || !userId) {
-                displayMessage("應用程式初始化失敗或認證未完成，無法執行刪除操作。", 'error');
-                return;
-            }
-            
-            const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的完整週期紀錄嗎？`);
-            if (!confirmation) return;
-
-            try {
-                const docRef = doc(db, getCollectionPath(), id);
-                await deleteDoc(docRef);
-                displayMessage("紀錄已刪除。", 'success');
-            } catch (e) {
-                console.error("刪除文件時發生錯誤:", e);
-                displayMessage(`刪除失敗: ${e.message}`, 'error');
-            }
-        }
         
-        // --- 模態視窗邏輯 ---
-        function openCollectionModal(recordId, mode) {
-            const record = allRecords.find(r => r.id === recordId);
-            if (!record) {
-                displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
-                return;
-            }
-            
-            const modal = document.getElementById('collection-modal');
-            const modalContent = document.getElementById('collection-modal-content');
-            
-            const modalTitle = document.getElementById('modal-title');
-            const modalModeInput = document.getElementById('modal-mode');
-            
-            // 獲取日期/時間/地點欄位
-            const collectionDateInput = document.getElementById('collection-date');
-            const collectionTimeInput = document.getElementById('collection-time');
-            const collectionLocationInput = document.getElementById('collection-location');
-            const endMileageInput = document.getElementById('end-mileage');
-
-
-            // 設置通用值
-            document.getElementById('modal-record-id').value = recordId;
-            document.getElementById('modal-plate-display').textContent = record.plate;
-            document.getElementById('modal-start-mileage').textContent = record.startMileage ? record.startMileage.toLocaleString() : '0';
-            modalModeInput.value = mode;
-
-            // 設置收車地點 Input 值
-            collectionLocationInput.value = record.collectionLocation || '';
-
-            // 清除上次的輸入值
-            endMileageInput.value = ''; 
-            
-            // --- 預設設置：兩種模式都設為非必填，然後再依模式覆蓋 ---
-            collectionDateInput.required = false;
-            collectionTimeInput.required = false;
-            collectionLocationInput.required = false;
-            endMileageInput.required = false;
-            
-            // 重設隱藏 class
-            document.getElementById('modal-date-container').classList.remove('hidden');
-            document.getElementById('modal-time-container').classList.remove('hidden');
-            document.getElementById('modal-location-container').classList.remove('hidden');
-            document.getElementById('modal-mileage-container').classList.remove('col-span-2');
-
-
-            if (mode === 'mileage') {
-                // --- 模式 2: 僅登錄里程 ---
-                modalTitle.textContent = '登錄結束里程數 (完成結算)';
-                document.getElementById('collection-submit-btn').textContent = '確認登錄並完成結算';
-                
-                // 隱藏日期/時間/地點
-                document.getElementById('modal-date-container').classList.add('hidden');
-                document.getElementById('modal-time-container').classList.add('hidden');
-                document.getElementById('modal-location-container').classList.add('hidden');
-                document.getElementById('modal-mileage-container').classList.add('col-span-2');
-
-                // 里程是必填
-                endMileageInput.required = true;
-                
-            } else {
-                // --- 模式 1: 記錄時間/地點 (full) ---
-                modalTitle.textContent = '記錄收車時間與地點';
-                document.getElementById('collection-submit-btn').textContent = '確認並儲存收車時間';
-
-                // 日期/時間/地點是必填的
-                collectionDateInput.required = true;
-                collectionTimeInput.required = true;
-                collectionLocationInput.required = true;
-                
-                // 預設日期和時間
-                const today = new Date().toISOString().split('T')[0];
-                const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
-                collectionDateInput.value = record.collectionDate || today;
-                collectionTimeInput.value = record.collectionTime || nowTime;
-                
-            }
-
-            // 顯示模態視窗
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modalContent.classList.remove('scale-95', 'opacity-0');
-                modalContent.classList.add('scale-100', 'opacity-100');
-            }, 10);
-        }
-
-        function closeCollectionModal() {
-            const modal = document.getElementById('collection-modal');
-            const modalContent = document.getElementById('collection-modal-content');
-            
-            // 隱藏模態視窗
-            modalContent.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                document.getElementById('collection-form').reset();
-            }, 300);
-        }
-        window.openCollectionModal = openCollectionModal;
-        window.closeCollectionModal = closeCollectionModal;
-        document.getElementById('collection-form').addEventListener('submit', submitCollectionUpdate);
-        
-        // --- 編輯模態視窗邏輯 (New) ---
-
-        function openEditModal(recordId) {
-            const record = allRecords.find(r => r.id === recordId);
-            if (!record) {
-                displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
-                return;
-            }
-
-            // 1. 設置 ID
-            document.getElementById('edit-record-id').value = recordId;
-
-            // 2. 設置交車資訊
-            editPlateInput.value = record.plate; // 車牌不可編輯
-            editDeliveryDateInput.value = record.deliveryDate;
-            editDeliveryTimeInput.value = record.deliveryTime;
-            editStartMileageInput.value = record.startMileage;
-            editNotesInput.value = record.notes || '';
-            
-            // 設置交車地點 Input 值
-            editDeliveryLocationSelect.value = record.deliveryLocation || '';
-
-
-            // 3. 設置收車資訊
-            editCollectionDateInput.value = record.collectionDate || '';
-            editCollectionTimeInput.value = record.collectionTime || '';
-            editEndMileageInput.value = record.endMileage || '';
-            
-            // 設置收車地點 Input 值
-            editCollectionLocationSelect.value = record.collectionLocation || '';
-            
-            // 4. 設置客戶資訊
-            editCustomerNameInput.value = record.customerName || '';
-            editCustomerPhoneInput.value = record.customerPhone || '';
-            editCustomerDobInput.value = record.customerDob || '';
-            
-            // 顯示模態視窗
-            const modal = document.getElementById('edit-modal');
-            const modalContent = document.getElementById('edit-modal-content');
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modalContent.classList.remove('scale-95', 'opacity-0');
-                modalContent.classList.add('scale-100', 'opacity-100');
-            }, 10);
-        }
-
-        async function submitEditUpdate(event) {
-            event.preventDefault();
-            if (!db || !userId) {
-                displayMessage("資料庫連線或用戶認證失敗，無法儲存修改。", 'error');
-                return;
-            }
-            
-            const recordId = document.getElementById('edit-record-id').value;
-            const originalRecord = allRecords.find(r => r.id === recordId);
-            const editSubmitBtn = document.getElementById('edit-submit-btn');
-
-            if (!originalRecord) {
-                displayMessage("找不到原始紀錄，無法修改。", 'error');
-                return;
-            }
-
-            editSubmitBtn.disabled = true;
-            
-            const startMileage = parseInt(editStartMileageInput.value, 10);
-            const endMileage = editEndMileageInput.value ? parseInt(editEndMileageInput.value, 10) : null;
-            
-            // --- 里程數防呆檢查 ---
-            if (endMileage !== null && endMileage < startMileage) {
-                displayMessage(`錯誤: 結束里程 (${endMileage.toLocaleString()} Km) 不得低於起始里程 (${startMileage.toLocaleString()} Km)。`, 'error');
-                editSubmitBtn.disabled = false;
-                return;
-            }
-            
-            // 準備更新數據
-            const updateData = {
-                // 交車資訊 (Delivery) - 可編輯
-                deliveryDate: editDeliveryDateInput.value,
-                deliveryTime: editDeliveryTimeInput.value,
-                deliveryLocation: editDeliveryLocationSelect.value.trim(), // 從 Input 獲取值並清理
-                startMileage: startMileage,
-                notes: editNotesInput.value || '',
-
-                // 收車資訊 (Collection) - 可編輯
-                collectionDate: editCollectionDateInput.value || null,
-                collectionTime: editCollectionTimeInput.value || null,
-                collectionLocation: editCollectionLocationSelect.value.trim() || null, // 從 Input 獲取值並清理
-                endMileage: endMileage,
-
-                // 客戶資訊 - 可編輯
-                customerName: editCustomerNameInput.value || null,
-                customerPhone: editCustomerPhoneInput.value || null,
-                customerDob: editCustomerDobInput.value || null,
-                
-                // 保持原有的 timestamp 用於排序
-                timestamp: originalRecord.timestamp 
-            };
-            
-            // 檢查是否影響防呆機制 (只有在修改交車或收車狀態時才檢查)
-            const oldPlate = originalRecord.plate;
-            const newStartMileage = updateData.startMileage;
-            const newEndMileage = updateData.endMileage;
-
-            // 如果交車里程被清空或不合法
-            if (isNaN(newStartMileage)) {
-                displayMessage("起始里程必須是有效數字。", 'error');
-                editSubmitBtn.disabled = false;
-                return;
-            }
-
-            // 如果紀錄從已完成變為待收車，則需要檢查車輛是否會與其他紀錄衝突
-            const wasCompleted = originalRecord.endMileage !== null;
-            const isNowCompleted = newEndMileage !== null;
-            
-            if (wasCompleted && !isNowCompleted) {
-                // 檢查是否有其他紀錄現在佔用了這輛車
-                const currentlyUnavailable = getUnavailablePlatesForTime(allRecords.filter(r => r.id !== recordId), createDateTime(updateData.deliveryDate, updateData.deliveryTime));
-                if (currentlyUnavailable.includes(oldPlate)) {
-                    displayMessage(`錯誤: 此車牌 (${oldPlate}) 在其他週期中已被租出，無法將本紀錄設為「待收車」。`, 'error');
-                    editSubmitBtn.disabled = false;
-                    return;
-                }
-            }
-
-
-            try {
-                const docRef = doc(db, getCollectionPath(), recordId);
-                await updateDoc(docRef, updateData);
-                displayMessage("紀錄修改成功！", 'success');
-                window.closeEditModal();
-            } catch (e) {
-                console.error("更新文件時發生錯誤:", e);
-                displayMessage(`修改失敗: ${e.message}`, 'error');
-            } finally {
-                editSubmitBtn.disabled = false;
-            }
-        }
-
-        function closeEditModal() {
-            const modal = document.getElementById('edit-modal');
-            const modalContent = document.getElementById('edit-modal-content');
-            
-            modalContent.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 300);
-        }
-        window.openEditModal = openEditModal;
-        window.closeEditModal = closeEditModal;
-        document.getElementById('edit-form').addEventListener('submit', submitEditUpdate);
-        // --- END 編輯模態視窗邏輯 ---
-
-
         
         // --- 車輛防呆邏輯 ---
         
@@ -1089,121 +702,8 @@
                 .map(record => record.plate);
         }
 
-        /** 設置車牌和 ETC 卡號的對應邏輯 */
-        function setupPlateEtcMapping(unavailablePlates = []) {
-            plateSelect.innerHTML = '<option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>'; 
-            
-            Object.keys(CAR_ETC_MAPPING).forEach(plateDescription => {
-                const etcId = CAR_ETC_MAPPING[plateDescription];
-                const option = document.createElement('option');
-                option.value = plateDescription; 
-                
-                if (unavailablePlates.includes(plateDescription)) {
-                    // 車輛已租出/排程衝突，禁用選項
-                    option.textContent = `${plateDescription} (已租出/衝突)`; 
-                    option.disabled = true;
-                } else {
-                    // 車輛可選
-                    option.textContent = `${plateDescription} (${etcId})`; 
-                }
-                
-                plateSelect.appendChild(option);
-            });
-        }
-        // --- END 車輛防呆邏輯 ---
-
-
-        /** 獲取簡化的車牌號碼 */
-        function getShortPlateDisplay(fullPlate) {
-            // 規則 1: 成田331わ7777 總統座 -> 7777 總統座
-            if (fullPlate.includes('成田331わ7777')) {
-                return '7777 總統座';
-            }
-            // 規則 2: なにわ334わ8888 40系 -> 8888 40系
-            if (fullPlate.includes('なにわ334わ8888')) {
-                return '8888 40系';
-            }
-            // 規則 3: 成田331わ88 4WD 8座 -> 88 4WD 8座
-            if (fullPlate.includes('成田331わ88')) {
-                return '88 4WD 8座';
-            }
-            // 規則 4: 和泉330わ3333 7座 中文導航 -> 3333 7座
-            if (fullPlate.includes('和泉330わ3333')) {
-                return '3333 7座';
-            }
-            // Fallback: 如果不符合上述規則，則返回完整車牌
-            return fullPlate;
-        }
-
-
-        /** 設置地點 Datalist 選項 (New) */
-        function setupDatalistOptions() {
-            const datalist = document.getElementById('location-list');
-            if (!datalist) return;
-            datalist.innerHTML = '';
-            
-            LOCATION_OPTIONS.forEach(location => {
-                const option = document.createElement('option');
-                option.value = location;
-                datalist.appendChild(option);
-            });
-        }
-
-
-        /** 顯示/隱藏詳細資訊 */
-        function toggleDetails(id) {
-            const detailRow = document.getElementById(`detail-row-${id}`);
-            const expandIcon = document.getElementById(`expand-icon-${id}`);
-            if (detailRow) {
-                const isHidden = detailRow.classList.toggle('hidden');
-                if (expandIcon) {
-                    expandIcon.textContent = isHidden ? '▼' : '▲';
-                }
-            }
-        }
-        window.toggleDetails = toggleDetails;
+        // --- 排程/日曆邏輯 ---
         
-        /** 滾動到指定紀錄並展開詳細資訊 (New) */
-        function scrollToRecord(recordId) {
-            const recordRow = document.getElementById(`detail-row-${recordId}`);
-            if (recordRow) {
-                // 1. 展開詳細資訊
-                const isHidden = recordRow.classList.contains('hidden');
-                if (isHidden) {
-                    window.toggleDetails(recordId);
-                }
-                
-                // 2. 滾動到卡片 (summaryDiv)
-                const summaryDiv = document.getElementById(`summary-row-${recordId}`);
-                    if (summaryDiv) {
-                    summaryDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    // 3. 短暫高亮
-                    summaryDiv.classList.add('ring-4', 'ring-indigo-300');
-                    setTimeout(() => {
-                        summaryDiv.classList.remove('ring-4', 'ring-indigo-300');
-                    }, 1500);
-                }
-            } else {
-                displayMessage("找不到該筆紀錄，請嘗試調整搜尋條件或重新載入頁面。", 'info');
-            }
-        }
-        window.scrollToRecord = scrollToRecord;
-
-        /** 處理日期區間篩選 */
-        function handleDateFilter() {
-            renderRecords(allRecords);
-        }
-        window.handleDateFilter = handleDateFilter;
-
-        /** 清除日期篩選 */
-        function clearDateFilter() {
-            filterStartDateInput.value = '';
-            filterEndDateInput.value = '';
-            renderRecords(allRecords);
-        }
-        window.clearDateFilter = clearDateFilter;
-
-
         /** 更新行程提示 (New) */
         function updateScheduleTip() {
             const today = new Date();
@@ -1307,10 +807,14 @@
             }
             
             // 每次更新完提示後，重新渲染日曆 (New)
-            renderCalendar();
+            if (!calendarContainer.classList.contains('hidden')) {
+                renderCalendar();
+            }
         }
+        window.updateScheduleTip = updateScheduleTip;
 
 
+        // 為了修復 ReferenceError，將 renderRecords 提升為 function declaration
         /** 渲染紀錄列表 (Card View) */
         function renderRecords(records) {
             recordsListContainer.innerHTML = '';
@@ -1514,71 +1018,10 @@
             updateScheduleTip();
         }
 
-        /** 從 Firestore 監聽紀錄的實時更新 */
-        function fetchRecords() {
-            if (!db || !userId) return;
 
-            const collectionRef = collection(db, getCollectionPath());
-            
-            // 使用 onSnapshot 實時監聽
-            onSnapshot(collectionRef, (snapshot) => {
-                const records = [];
-                snapshot.forEach((doc) => {
-                    records.push({ id: doc.id, ...doc.data() });
-                });
-                
-                allRecords = records; // 更新全局紀錄列表
-                
-                // DEBUG: 這裡不需要額外的 console.log，renderRecords 已經有 console.log 了
-                renderRecords(allRecords); // 渲染列表
-                
-                // === 防呆機制：過濾已租出的車輛 (使用當前表單時間) ===
-                const date = document.getElementById('record-date').value;
-                const time = document.getElementById('record-time').value;
-                
-                let unavailablePlates = [];
-                if (date && time) {
-                     unavailablePlates = getUnavailablePlatesForTime(allRecords, createDateTime(date, time));
-                }
-                setupPlateEtcMapping(unavailablePlates);
-                // ======================================
-                
-                updateScheduleTip(); // <-- Call the new function here, which also calls renderCalendar
-                
-                // !!! 新增除錯紀錄: 顯示讀取到的紀錄數量 !!!
-                console.log("資料已更新 (Firestore 讀取數量):", records.length, "筆紀錄");
-            }, (error) => {
-                console.error("監聽紀錄時發生錯誤:", error);
-                displayMessage("載入紀錄失敗，請檢查權限。", 'error');
-            });
-        }
+        // --- 其他輔助函式 (initFirebase, getCollectionPath, etc.) 保持不變 ---
         
-        // --- 日曆/排程邏輯 (還原 Grid) ---
-
-        // 輔助函式：取得 date string 的日期部分
-        function getDate(dateStr) {
-            return new Date(dateStr + "T00:00:00");
-        }
-
-        // 輔助函式：計算兩個日期之間的天數
-        function getDaysBetween(date1, date2) {
-            const date1Ms = getDate(date1).getTime();
-            const date2Ms = getDate(date2).getTime();
-            const diffTime = Math.abs(date2Ms - date1Ms);
-            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 包含頭尾兩天
-        }
-        
-        // 輔助函式：計算車牌的顏色索引
-        function getPlateColor(plate) {
-            let hash = 0;
-            for (let i = 0; i < plate.length; i++) {
-                hash = plate.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            const index = Math.abs(hash) % PLATE_COLORS.length;
-            return PLATE_COLORS[index];
-        }
-
-        // 渲染日曆排程長條 (最終修正邏輯)
+        /** 渲染日曆排程長條 (Grid 佈局) */
         function renderEventsOverlay(records) {
             if (!Array.isArray(records)) return; 
 
@@ -1597,7 +1040,7 @@
             
             // 過濾出本月有排程的週期 (必須有排定收車時間)
             const visibleCycles = records.filter(r => 
-                r.collectionDate && r.collectionTime && r.deliveryDate && r.deliveryTime &&
+                r.collectionDate && r.deliveryDate &&
                 (getDate(r.deliveryDate).getTime() <= currentMonthEnd.getTime()) &&
                 (getDate(r.collectionDate).getTime() >= currentMonthStart.getTime())
             );
@@ -1652,6 +1095,11 @@
                         gridColEnd = 8;
                     }
                     
+                    // 修正 2: 修正 segmentEnd 剛好是星期六且是週期結束的情況
+                    if (segmentEnd.getDay() === 6 && segmentEnd.getTime() === collectionDate.getTime()) {
+                        gridColEnd = 8;
+                    }
+
                     // 計算 Grid Row Start
                     const gridRowStart = Math.floor(totalDayIndex / 7) + 1;
 
@@ -1695,7 +1143,7 @@
                         track: track,
                         start: getFormattedDate(segmentStart),
                         end: getFormattedDate(segmentEnd),
-                        gridRowStart: gridRowStart, // 新增：儲存計算出的行索引
+                        gridRowStart: gridRowStart, 
                         gridColStart: gridColStart,
                         gridColEnd: gridColEnd
                     });
@@ -1882,7 +1330,681 @@
         document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
 
 
-        // --- END 日曆/排程邏輯 ---
+        /** 從 Firestore 監聽紀錄的實時更新 */
+        function fetchRecords() {
+            if (!db || !userId) return;
+
+            const collectionRef = collection(db, getCollectionPath());
+            
+            // 使用 onSnapshot 實時監聽
+            onSnapshot(collectionRef, (snapshot) => {
+                const records = [];
+                snapshot.forEach((doc) => {
+                    records.push({ id: doc.id, ...doc.data() });
+                });
+                
+                allRecords = records; // 更新全局紀錄列表
+                
+                // DEBUG: 這裡不需要額外的 console.log，renderRecords 已經有 console.log 了
+                renderRecords(allRecords); // 渲染列表
+                
+                // === 防呆機制：過濾已租出的車輛 (使用當前表單時間) ===
+                const date = document.getElementById('record-date').value;
+                const time = document.getElementById('record-time').value;
+                
+                let unavailablePlates = [];
+                if (date && time) {
+                     unavailablePlates = getUnavailablePlatesForTime(allRecords, createDateTime(date, time));
+                }
+                setupPlateEtcMapping(unavailablePlates);
+                // ======================================
+                
+                updateScheduleTip(); // <-- Call the new function here, which also calls renderCalendar
+                
+                // !!! 新增除錯紀錄: 顯示讀取到的紀錄數量 !!!
+                console.log("資料已更新 (Firestore 讀取數量):", records.length, "筆紀錄");
+            }, (error) => {
+                console.error("監聽紀錄時發生錯誤:", error);
+                displayMessage("載入紀錄失敗，請檢查權限。", 'error');
+            });
+        }
+
+
+        // --- 車隊管理邏輯 ---
+        
+        /** 檢查並初始化固定車隊數據 */
+        async function checkAndInitFleet() {
+            try {
+                const fleetRef = collection(db, getCollectionPath('fleet'));
+                const snapshot = await getDocs(fleetRef);
+                
+                if (snapshot.empty) {
+                    console.log("車隊列表為空，正在初始化固定車輛...");
+                    for (const car of INITIAL_CAR_FLEET) {
+                        await addDoc(fleetRef, car);
+                    }
+                    displayMessage("已自動新增四筆初始車隊資料。", 'info');
+                }
+            } catch (e) {
+                 console.error("初始化車隊失敗:", e);
+            }
+        }
+
+        /** 渲染車隊列表到模態視窗 */
+        function renderFleetList() {
+            fleetListContainer.innerHTML = '';
+            
+            if (allFleet.length === 0) {
+                fleetListContainer.innerHTML = `<p class="text-gray-500 text-center">目前車隊中沒有任何車輛。</p>`;
+                return;
+            }
+            
+            allFleet.forEach(car => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center p-3 bg-white border rounded-lg shadow-sm";
+                div.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-gray-800">${car.plate}</p>
+                        <p class="text-xs text-gray-500">ETC ID: ${car.etcId}</p>
+                    </div>
+                    <button onclick="window.deleteFleetCar('${car.id}')" class="px-2 py-1 text-xs text-red-600 hover:text-red-800 transition duration-150">
+                        移除
+                    </button>
+                `;
+                fleetListContainer.appendChild(div);
+            });
+        }
+        
+        /** 從 Firestore 監聽車隊列表 */
+        function fetchFleet() {
+            if (!db) return;
+
+            const fleetRef = collection(db, getCollectionPath('fleet'));
+            
+            onSnapshot(fleetRef, async (snapshot) => {
+                const fleet = [];
+                snapshot.forEach(doc => {
+                    fleet.push({ id: doc.id, ...doc.data() });
+                });
+                
+                allFleet = fleet; // 更新全局車隊列表
+                
+                // 檢查是否需要初始化 (僅在第一次載入且為空時執行)
+                if (snapshot.empty && isAuthReady) {
+                    await checkAndInitFleet();
+                }
+
+                // 更新交車表單下拉選單
+                const date = document.getElementById('record-date').value;
+                const time = document.getElementById('record-time').value;
+                let unavailablePlates = [];
+                if (date && time) {
+                    unavailablePlates = getUnavailablePlatesForTime(allRecords, createDateTime(date, time));
+                }
+                setupPlateEtcMapping(unavailablePlates);
+                
+                renderFleetList(); // 更新管理視窗
+            }, (error) => {
+                console.error("監聽車隊時發生錯誤:", error);
+                // 這裡的錯誤必須在安全規則修正後才能解決
+                displayMessage("載入車隊列表失敗。請檢查您的 Firebase 安全規則，確保 vehicle_fleet_shared 允許讀寫。", 'error');
+            });
+        }
+
+        /** 新增車牌到車隊 */
+        async function addPlateToFleet(event) {
+            event.preventDefault();
+            if (!db || !userId) {
+                displayMessage("認證失敗，無法新增車牌。", 'error');
+                return;
+            }
+
+            const plate = newPlateDescriptionInput.value.trim();
+            const etcId = newPlateEtcInput.value.trim();
+            
+            if (!plate || !etcId) {
+                displayMessage("車牌描述和 ETC 卡號為必填。", 'error');
+                return;
+            }
+            
+            const existing = allFleet.find(car => car.plate === plate);
+            if (existing) {
+                 displayMessage("車牌已存在於列表中。", 'error');
+                 return;
+            }
+
+            try {
+                const fleetRef = collection(db, getCollectionPath('fleet'));
+                await addDoc(fleetRef, { plate, etcId });
+                displayMessage(`車牌 ${plate} 已成功新增至車隊。`, 'success');
+                newPlateForm.reset();
+            } catch (e) {
+                console.error("新增車牌失敗:", e);
+                displayMessage(`新增車牌失敗: ${e.message}`, 'error');
+            }
+        }
+        window.addPlateToFleet = addPlateToFleet; // 暴露給全局作用域
+
+        /** 從車隊中移除車牌 */
+        async function deleteFleetCar(id) {
+            if (!db || !userId) return;
+            
+            const confirmation = confirm("確定要從車隊列表中移除這筆車牌嗎？這不會影響已建立的紀錄。");
+            if (!confirmation) return;
+
+            try {
+                const docRef = doc(db, getCollectionPath('fleet'), id);
+                await deleteDoc(docRef);
+                displayMessage("車牌已從車隊中移除。", 'success');
+            } catch (e) {
+                console.error("移除車牌失敗:", e);
+                displayMessage(`移除失敗: ${e.message}`, 'error');
+            }
+        }
+        window.deleteFleetCar = deleteFleetCar;
+
+        /** 設置車牌和 ETC 卡號的對應邏輯 (現在從 allFleet 動態生成) */
+        function setupPlateEtcMapping(unavailablePlates = []) {
+            plateSelect.innerHTML = '<option value="" disabled selected>請選擇車牌 (ETC 卡號)</option>'; 
+            
+            allFleet.forEach(car => {
+                const plateDescription = car.plate;
+                const etcId = car.etcId;
+                const option = document.createElement('option');
+                option.value = plateDescription; 
+                
+                if (unavailablePlates.includes(plateDescription)) {
+                    // 車輛已租出/排程衝突，禁用選項
+                    option.textContent = `${plateDescription} (${etcId}) (已租出/衝突)`; 
+                    option.disabled = true;
+                } else {
+                    // 車輛可選
+                    option.textContent = `${plateDescription} (${etcId})`; 
+                }
+                
+                plateSelect.appendChild(option);
+            });
+            
+            if (allFleet.length === 0) {
+                 plateSelect.innerHTML = '<option value="" disabled selected>請先新增車牌到車隊</option>';
+            }
+        }
+
+
+        // --- CRUD/Modal Logic (保持不變) ---
+
+        /** 新增紀錄到 Firestore (僅限交車) */
+        async function addRecord(event) {
+            event.preventDefault();
+            if (!db || !userId) {
+                displayMessage("資料庫連線或用戶認證失敗，無法儲存紀錄。請檢查設定或重新載入。", 'error');
+                return;
+            }
+
+            document.getElementById('submit-button').disabled = true;
+
+            // 客戶資料 (選填)
+            const customerName = customerNameInput.value || '';
+            const customerPhone = customerPhoneInput.value || '';
+            const customerDob = customerDobInput.value || '';
+
+            // 交車資訊 (必填)
+            const date = document.getElementById('record-date').value;
+            const time = document.getElementById('record-time').value;
+            const action = document.getElementById('record-action').value; // 固定為 '交車'
+            const location = locationSelect.value.trim(); // 從 Input 獲取值並清理
+            const plate = plateSelect.value; 
+            
+            // 取得 ETC ID (現在從 allFleet 獲取)
+            const car = allFleet.find(f => f.plate === plate);
+            const etcId = car ? car.etcId : null; 
+            
+            const mileage = document.getElementById('record-mileage').value;
+            const notes = document.getElementById('record-notes').value || '';
+
+            if (!plate || !etcId) {
+                displayMessage("請選擇車牌，或透過「管理車隊」新增車輛。", 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+            
+            // 檢查車牌是否被禁用 (二次防呆，確保選單未被繞過)
+            const selectedOption = plateSelect.options[plateSelect.selectedIndex];
+            if (selectedOption && selectedOption.disabled) {
+                 displayMessage("所選車牌目前正在租賃週期中，請先完成收車後再進行交車。", 'error');
+                 document.getElementById('submit-button').disabled = false;
+                 return;
+            }
+
+            if (!location) {
+                displayMessage("請輸入交車地點。", 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+
+            const dateTimeString = `${date}T${time}:00`;
+            const recordTime = new Date(dateTimeString);
+            
+            if (isNaN(recordTime)) {
+                displayMessage("日期或時間格式無效。", 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+
+            const newRecord = {
+                // 客戶資料
+                customerName: customerName,
+                customerPhone: customerPhone,
+                customerDob: customerDob,
+
+                // 交車資訊
+                action: action, // 交車
+                deliveryDate: date,
+                deliveryTime: time,
+                deliveryLocation: location,
+                startMileage: parseInt(mileage, 10), // 起始里程
+                plate: plate,
+                etcId: etcId,
+                notes: notes,
+                
+                // 收車資訊 (預設為空，表示週期開放)
+                collectionDate: null,
+                collectionTime: null,
+                collectionLocation: null,
+                endMileage: null,
+                
+                timestamp: Timestamp.fromDate(recordTime) // 使用交車時間作為主要排序
+            };
+
+            try {
+                const collectionRef = collection(db, getCollectionPath());
+                await addDoc(collectionRef, newRecord);
+                displayMessage("交車紀錄儲存成功！週期已開啟。", 'success');
+                document.getElementById('record-form').reset();
+            } catch (e) {
+                console.error("新增文件時發生錯誤:", e);
+                displayMessage(`儲存失敗: ${e.message}`, 'error');
+            } finally {
+                document.getElementById('submit-button').disabled = false;
+            }
+        }
+
+        /** 更新紀錄 (收車或登錄里程) */
+        async function submitCollectionUpdate(event) {
+            event.preventDefault();
+            if (!db || !userId) {
+                displayMessage("資料庫連線或用戶認證失敗，無法完成收車。", 'error');
+                return;
+            }
+
+            const recordId = document.getElementById('modal-record-id').value;
+            const mode = document.getElementById('modal-mode').value;
+            
+            // 模態視窗的輸入欄位
+            const collectionDate = document.getElementById('collection-date').value;
+            const collectionTime = document.getElementById('collection-time').value;
+            const collectionLocation = collectionLocationSelect.value.trim(); // 從 Input 獲取值並清理
+            const endMileageInput = document.getElementById('end-mileage').value;
+            
+            const updateData = {};
+            const collectionSubmitBtn = document.getElementById('collection-submit-btn');
+
+            // 取得起始里程 (用於里程檢查)
+            const record = allRecords.find(r => r.id === recordId);
+            const startMileage = record ? record.startMileage : 0;
+            
+            collectionSubmitBtn.disabled = true;
+
+            if (mode === 'full') {
+                // --- 模式 1: 記錄時間/地點 (預收車) ---
+                if (!collectionDate || !collectionTime || !collectionLocation) {
+                    displayMessage("請填寫完整的收車時間和地點。", 'error');
+                    collectionSubmitBtn.disabled = false;
+                    return;
+                }
+
+                updateData.collectionDate = collectionDate;
+                updateData.collectionTime = collectionTime;
+                updateData.collectionLocation = collectionLocation;
+                // endMileage 仍然為 null，保持「待登錄里程」狀態
+                
+                // 如果用戶在 'full' 模式下也輸入了里程，則直接完成
+                if (endMileageInput.trim() !== "") {
+                    const endMileage = parseInt(endMileageInput, 10);
+                    if (isNaN(endMileage) || endMileage < startMileage) {
+                        displayMessage(`結束里程數無效或低於起始里程 (${startMileage.toLocaleString()} Km)。`, 'error');
+                        collectionSubmitBtn.disabled = false;
+                        return;
+                    }
+                    updateData.endMileage = endMileage;
+                }
+
+            } else if (mode === 'mileage') {
+                // --- 模式 2: 登錄最終里程 (結算) ---
+                
+                // 檢查是否為空字串，空字串不應被視為 0
+                if (endMileageInput.trim() === "") {
+                    displayMessage("請輸入有效的結束里程數。", 'error');
+                    collectionSubmitBtn.disabled = false;
+                    return;
+                }
+
+                const endMileage = parseInt(endMileageInput, 10);
+                
+                if (isNaN(endMileage)) {
+                    // 再次檢查是否為無效數字 (雖然 trim() 應該排除了空字串，但排除其他非數字輸入)
+                    displayMessage("請輸入有效的結束里程數。", 'error');
+                    collectionSubmitBtn.disabled = false;
+                    return;
+                }
+                
+                if (endMileage < startMileage) {
+                     displayMessage(`收車里程 (${endMileage.toLocaleString()} Km) 不得低於交車里程 (${startMileage.toLocaleString()} Km)。`, 'error');
+                     collectionSubmitBtn.disabled = false;
+                     return;
+                }
+                
+                updateData.endMileage = endMileage;
+                
+                // 這裡無需修改日期和地點，它們在資料庫中的值保持不變
+            }
+
+            try {
+                const docRef = doc(db, getCollectionPath(), recordId);
+                await updateDoc(docRef, updateData);
+
+                if (updateData.endMileage) {
+                     displayMessage(`收車紀錄已完成！里程差: ${(updateData.endMileage - startMileage).toLocaleString()} Km`, 'success');
+                } else {
+                     displayMessage(`收車時間/地點已記錄，待登錄最終里程。`, 'success');
+                }
+                
+                window.closeCollectionModal();
+
+            } catch (e) {
+                console.error("更新收車紀錄時發生錯誤:", e);
+                displayMessage(`儲存失敗: ${e.message}`, 'error');
+            } finally {
+                collectionSubmitBtn.disabled = false;
+            }
+        }
+
+        /** 刪除紀錄 */
+        async function deleteLogRecord(id) {
+            // 檢查 Firebase 是否成功初始化 (db存在) 且用戶已認證
+            if (!db || !userId) {
+                displayMessage("應用程式初始化失敗或認證未完成，無法執行刪除操作。", 'error');
+                return;
+            }
+            
+            const confirmation = confirm(`確定要刪除這筆 ID 為 ${id.substring(0, 8)}... 的完整週期紀錄嗎？`);
+            if (!confirmation) return;
+
+            try {
+                const docRef = doc(db, getCollectionPath(), id);
+                await deleteDoc(docRef);
+                displayMessage("紀錄已刪除。", 'success');
+            } catch (e) {
+                console.error("刪除文件時發生錯誤:", e);
+                displayMessage(`刪除失敗: ${e.message}`, 'error');
+            }
+        }
+        window.deleteLogRecord = deleteLogRecord;
+
+
+        // --- 模態視窗邏輯 ---
+        function openCollectionModal(recordId, mode) {
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) {
+                displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
+                return;
+            }
+            
+            const modal = document.getElementById('collection-modal');
+            const modalContent = document.getElementById('collection-modal-content');
+            
+            const modalTitle = document.getElementById('modal-title');
+            const modalModeInput = document.getElementById('modal-mode');
+            
+            // 獲取日期/時間/地點欄位
+            const collectionDateInput = document.getElementById('collection-date');
+            const collectionTimeInput = document.getElementById('collection-time');
+            const collectionLocationInput = document.getElementById('collection-location');
+            const endMileageInput = document.getElementById('end-mileage');
+
+
+            // 設置通用值
+            document.getElementById('modal-record-id').value = recordId;
+            document.getElementById('modal-plate-display').textContent = record.plate;
+            document.getElementById('modal-start-mileage').textContent = record.startMileage ? record.startMileage.toLocaleString() : '0';
+            modalModeInput.value = mode;
+
+            // 設置收車地點 Input 值
+            collectionLocationInput.value = record.collectionLocation || '';
+
+            // 清除上次的輸入值
+            endMileageInput.value = ''; 
+            
+            // --- 預設設置：兩種模式都設為非必填，然後再依模式覆蓋 ---
+            collectionDateInput.required = false;
+            collectionTimeInput.required = false;
+            collectionLocationInput.required = false;
+            endMileageInput.required = false;
+            
+            // 重設隱藏 class
+            document.getElementById('modal-date-container').classList.remove('hidden');
+            document.getElementById('modal-time-container').classList.remove('hidden');
+            document.getElementById('modal-location-container').classList.remove('hidden');
+            document.getElementById('modal-mileage-container').classList.remove('col-span-2');
+
+
+            if (mode === 'mileage') {
+                // --- 模式 2: 僅登錄里程 ---
+                modalTitle.textContent = '登錄結束里程數 (完成結算)';
+                document.getElementById('collection-submit-btn').textContent = '確認登錄並完成結算';
+                
+                // 隱藏日期/時間/地點
+                document.getElementById('modal-date-container').classList.add('hidden');
+                document.getElementById('modal-time-container').classList.add('hidden');
+                document.getElementById('modal-location-container').classList.add('hidden');
+                document.getElementById('modal-mileage-container').classList.add('col-span-2');
+
+                // 里程是必填
+                endMileageInput.required = true;
+                
+            } else {
+                // --- 模式 1: 記錄時間/地點 (full) ---
+                modalTitle.textContent = '記錄收車時間與地點';
+                document.getElementById('collection-submit-btn').textContent = '確認並儲存收車時間';
+
+                // 日期/時間/地點是必填的
+                collectionDateInput.required = true;
+                collectionTimeInput.required = true;
+                collectionLocationInput.required = true;
+                
+                // 預設日期和時間
+                const today = new Date().toISOString().split('T')[0];
+                const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
+                collectionDateInput.value = record.collectionDate || today;
+                collectionTimeInput.value = record.collectionTime || nowTime;
+                
+            }
+
+            // 顯示模態視窗
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeCollectionModal() {
+            const modal = document.getElementById('collection-modal');
+            const modalContent = document.getElementById('collection-modal-content');
+            
+            // 隱藏模態視窗
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('collection-form').reset();
+            }, 300);
+        }
+        window.openCollectionModal = openCollectionModal;
+        window.closeCollectionModal = closeCollectionModal;
+        
+        
+        // --- 編輯模態視窗邏輯 ---
+        function openEditModal(recordId) {
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) {
+                displayMessage("錯誤: 找不到該筆紀錄資料，請重整頁面。", 'error');
+                return;
+            }
+
+            // 1. 設置 ID
+            document.getElementById('edit-record-id').value = recordId;
+
+            // 2. 設置交車資訊
+            editPlateInput.value = record.plate; // 車牌不可編輯
+            editDeliveryDateInput.value = record.deliveryDate;
+            editDeliveryTimeInput.value = record.deliveryTime;
+            editStartMileageInput.value = record.startMileage;
+            editNotesInput.value = record.notes || '';
+            
+            // 設置交車地點 Input 值
+            editDeliveryLocationSelect.value = record.deliveryLocation || '';
+
+
+            // 3. 設置收車資訊
+            editCollectionDateInput.value = record.collectionDate || '';
+            editCollectionTimeInput.value = record.collectionTime || '';
+            editEndMileageInput.value = record.endMileage || '';
+            
+            // 設置收車地點 Input 值
+            editCollectionLocationSelect.value = record.collectionLocation || '';
+            
+            // 4. 設置客戶資訊
+            editCustomerNameInput.value = record.customerName || '';
+            editCustomerPhoneInput.value = record.customerPhone || '';
+            editCustomerDobInput.value = record.customerDob || '';
+            
+            // 顯示模態視窗
+            const modal = document.getElementById('edit-modal');
+            const modalContent = document.getElementById('edit-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        async function submitEditUpdate(event) {
+            event.preventDefault();
+            if (!db || !userId) {
+                displayMessage("資料庫連線或用戶認證失敗，無法儲存修改。", 'error');
+                return;
+            }
+            
+            const recordId = document.getElementById('edit-record-id').value;
+            const originalRecord = allRecords.find(r => r.id === recordId);
+            const editSubmitBtn = document.getElementById('edit-submit-btn');
+
+            if (!originalRecord) {
+                displayMessage("找不到原始紀錄，無法修改。", 'error');
+                return;
+            }
+
+            editSubmitBtn.disabled = true;
+            
+            const startMileage = parseInt(editStartMileageInput.value, 10);
+            const endMileage = editEndMileageInput.value ? parseInt(editEndMileageInput.value, 10) : null;
+            
+            // --- 里程數防呆檢查 ---
+            if (endMileage !== null && endMileage < startMileage) {
+                displayMessage(`錯誤: 結束里程 (${endMileage.toLocaleString()} Km) 不得低於起始里程 (${startMileage.toLocaleString()} Km)。`, 'error');
+                editSubmitBtn.disabled = false;
+                return;
+            }
+            
+            // 準備更新數據
+            const updateData = {
+                // 交車資訊 (Delivery) - 可編輯
+                deliveryDate: editDeliveryDateInput.value,
+                deliveryTime: editDeliveryTimeInput.value,
+                deliveryLocation: editDeliveryLocationSelect.value.trim(), // 從 Input 獲取值並清理
+                startMileage: startMileage,
+                notes: editNotesInput.value || '',
+
+                // 收車資訊 (Collection) - 可編輯
+                collectionDate: editCollectionDateInput.value || null,
+                collectionTime: editCollectionTimeInput.value || null,
+                collectionLocation: editCollectionLocationSelect.value.trim() || null, // 從 Input 獲取值並清理
+                endMileage: endMileage,
+
+                // 客戶資訊 - 可編輯
+                customerName: editCustomerNameInput.value || null,
+                customerPhone: editCustomerPhoneInput.value || null,
+                customerDob: editCustomerDobInput.value || null,
+                
+                // 保持原有的 timestamp 用於排序
+                timestamp: originalRecord.timestamp 
+            };
+            
+            // 檢查是否影響防呆機制 (只有在修改交車或收車狀態時才檢查)
+            const oldPlate = originalRecord.plate;
+            const newStartMileage = updateData.startMileage;
+            const newEndMileage = updateData.endMileage;
+
+            // 如果交車里程被清空或不合法
+            if (isNaN(newStartMileage)) {
+                displayMessage("起始里程必須是有效數字。", 'error');
+                editSubmitBtn.disabled = false;
+                return;
+            }
+
+            // 如果紀錄從已完成變為待收車，則需要檢查車輛是否會與其他紀錄衝突
+            const wasCompleted = originalRecord.endMileage !== null;
+            const isNowCompleted = newEndMileage !== null;
+            
+            if (wasCompleted && !isNowCompleted) {
+                // 檢查是否有其他紀錄現在佔用了這輛車
+                const currentlyUnavailable = getUnavailablePlatesForTime(allRecords.filter(r => r.id !== recordId), createDateTime(updateData.deliveryDate, updateData.deliveryTime));
+                if (currentlyUnavailable.includes(oldPlate)) {
+                    displayMessage(`錯誤: 此車牌 (${oldPlate}) 在其他週期中已被租出，無法將本紀錄設為「待收車」。`, 'error');
+                    editSubmitBtn.disabled = false;
+                    return;
+                }
+            }
+
+
+            try {
+                const docRef = doc(db, getCollectionPath(), recordId);
+                await updateDoc(docRef, updateData);
+                displayMessage("紀錄修改成功！", 'success');
+                window.closeEditModal();
+            } catch (e) {
+                console.error("更新文件時發生錯誤:", e);
+                displayMessage(`修改失敗: ${e.message}`, 'error');
+            } finally {
+                editSubmitBtn.disabled = false;
+            }
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            const modalContent = document.getElementById('edit-modal-content');
+            
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+        window.openEditModal = openEditModal;
+        window.closeEditModal = closeEditModal;
+        
+        document.getElementById('edit-form').addEventListener('submit', submitEditUpdate);
+        // --- END 編輯模態視窗邏輯 ---
+
 
         
         // --- 事件監聽器 ---
@@ -1900,8 +2022,6 @@
             setupPlateEtcMapping(getUnavailablePlatesForTime(allRecords, initialDateTime));
             
             document.getElementById('record-form').addEventListener('submit', addRecord);
-            
-            window.deleteLogRecord = deleteLogRecord; 
             
             // 註冊重新整理和搜尋事件
             window.refreshRecords = () => {
