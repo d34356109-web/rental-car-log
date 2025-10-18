@@ -189,7 +189,7 @@
                         <input type="text" id="customer-name" placeholder="例如: 王小明" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     <div>
-                        <label for="customer-phone" class="block text-sm font-medium text-gray-700">聯絡電話</label>
+                        <label for="customer-phone" class="block tock text-sm font-medium text-gray-700">聯絡電話</label>
                         <input type="tel" id="customer-phone" placeholder="例如: 0912345678" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     <div>
@@ -319,7 +319,7 @@
                         </div>
                         
                         <div>
-                            <label for="edit-collection-location" class="block text-sm font-medium text-gray-700">收車地點</label>
+                            <label for="edit-collection-location" class="block tock text-sm font-medium text-gray-700">收車地點</label>
                              <input type="text" id="edit-collection-location" list="location-list" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
                         </div>
                         
@@ -338,7 +338,7 @@
                         </div>
                         
                         <div>
-                            <label for="edit-customer-phone" class="block text-sm font-medium text-gray-700">聯絡電話</label>
+                            <label for="edit-customer-phone" class="block tock text-sm font-medium text-gray-700">聯絡電話</label>
                             <input type="tel" id="edit-customer-phone" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border">
                         </div>
 
@@ -348,7 +348,7 @@
                         </div>
                         
                         <div>
-                            <label for="edit-notes" class="block text-sm font-medium text-gray-700">需求 / 備註</label>
+                            <label for="edit-notes" class="block tock text-sm font-medium text-gray-700">需求 / 備註</label>
                             <textarea id="edit-notes" rows="3" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border"></textarea>
                         </div>
                     </div>
@@ -498,6 +498,19 @@
         const customerDobInput = document.getElementById('customer-dob');
         
         // 編輯模態視窗元素 (已省略部分)
+        const editPlateInput = document.getElementById('edit-plate');
+        const editDeliveryDateInput = document.getElementById('edit-delivery-date');
+        const editDeliveryTimeInput = document.getElementById('edit-delivery-time');
+        const editDeliveryLocationSelect = document.getElementById('edit-delivery-location');
+        const editStartMileageInput = document.getElementById('edit-start-mileage');
+        const editNotesInput = document.getElementById('edit-notes');
+        const editCollectionDateInput = document.getElementById('edit-collection-date');
+        const editCollectionTimeInput = document.getElementById('edit-collection-time');
+        const editCollectionLocationSelect = document.getElementById('edit-collection-location');
+        const editEndMileageInput = document.getElementById('edit-end-mileage');
+        const editCustomerNameInput = document.getElementById('edit-customer-name');
+        const editCustomerPhoneInput = document.getElementById('edit-customer-phone');
+        const editCustomerDobInput = document.getElementById('edit-customer-dob');
 
 
         /** 顯示應用程式訊息 */
@@ -574,35 +587,59 @@
             return PLATE_COLORS[index];
         }
 
-        /** 獲取簡化的車牌號碼 */
+        // =================================================================
+        // *** 核心修復 1: 增強 getShortPlateDisplay 函式健壯性 ***
+        // =================================================================
+        /** 獲取簡化的車牌號碼 (修正邏輯，確保對新車牌的健壯性) */
         function getShortPlateDisplay(fullPlate) {
-            // 規則 1: 成田331わ7777 總統座 -> 7777 總統座
+            // 1. 舊有硬編碼規則 (可保留，用於識別固定車牌)
             if (fullPlate.includes('成田331わ7777')) {
                 return '7777 總統座';
             }
-            // 規則 2: なにわ334わ8888 40系 -> 8888 40系
             if (fullPlate.includes('なにわ334わ8888')) {
                 return '8888 40系';
             }
-            // 規則 3: 成田331わ88 4WD 8座 -> 88 4WD 8座
             if (fullPlate.includes('成田331わ88')) {
                 return '88 4WD 8座';
             }
-            // 規則 4: 和泉330わ3333 7座 中文導航 -> 3333 7座
             if (fullPlate.includes('和泉330わ3333')) {
                 return '3333 7座';
             }
             
-            // 針對新車牌的防呆處理：安全返回車牌的一部分
-            // 嘗試提取車牌號碼的最後四位或一個簡短標籤
+            // 2. 健壯的新車牌處理邏輯：
+            const parts = fullPlate.split(' ').filter(p => p.trim() !== '');
+            
+            // a. 嘗試提取最後的描述標籤 (非數字開頭的部分)
+            const labelPart = parts.findLast(p => isNaN(parseInt(p.charAt(0))) || p.match(/[a-zA-Z]/)); 
+            
+            // b. 嘗試提取車牌號碼的最後四位 (例如：XXX-1234 中的 1234)
             const match = fullPlate.match(/\d{4}/); 
-            if (match) {
-                return fullPlate.substring(fullPlate.lastIndexOf(match[0]));
+            const numberPart = match ? match[0] : '';
+            
+            // 組合: 優先顯示數字 + 標籤
+            let display = numberPart;
+            if (labelPart && !labelPart.includes(numberPart)) {
+                // 排除標籤就是數字本身的情況
+                if (display) {
+                    display += ' ' + labelPart;
+                } else {
+                    display = labelPart;
+                }
+            } else if (!display && parts.length > 0) {
+                 // 如果連四位數字都沒有，則顯示整個描述的第一部分
+                 display = parts[0];
             }
             
-            // 如果無法解析，則取前 15 個字元並加上...
-            return fullPlate.length > 15 ? fullPlate.substring(0, 15) + '...' : fullPlate;
+            // c. 最終防呆: 如果過長，則截斷
+            if (display.length > 15) {
+                return display.substring(0, 15) + '...';
+            }
+            
+            return display || fullPlate; // 確保永遠返回一個值
         }
+        // =================================================================
+        // =================================================================
+
 
         /** 設置地點 Datalist 選項 */
         function setupDatalistOptions() {
@@ -996,7 +1033,7 @@
                             }
                             ${isCompleted ? 
                                  `<p><span class="font-medium text-gray-500">結束里程:</span> <span class="font-bold text-indigo-600">${record.endMileage ? record.endMileage.toLocaleString() : '—'} Km</span></p>
-                                 <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></p>` : 
+                                 <p><span class="font-medium text-gray-500">總里程差:</span> <span class="font-bold text-pink-600">${(record.endMileage && record.startMileage) ? (record.endMileage - record.startMileage).toLocaleString() : '—'} Km</span></span></p>` : 
                                  (isTimeLogged ? 
                                     `<p class="text-orange-600 font-semibold">里程待登錄，週期尚未結算。</p>` : ''
                                  )
@@ -1560,8 +1597,13 @@
             
             // 取得 ETC ID (現在從 allFleet 獲取)
             const car = allFleet.find(f => f.plate === plate);
-            // 修正: 確保 etcId 即使找不到也有一個值，避免阻止儲存
-            const etcId = car ? car.etcId : '未知/手動新增'; 
+            // 核心修復：如果找不到車輛（不該發生，但作為防呆），直接返回錯誤訊息
+            if (!car) {
+                 displayMessage("錯誤：所選車牌在車隊列表中找不到 ETC ID，請重整頁面或檢查車隊管理。", 'error');
+                 document.getElementById('submit-button').disabled = false;
+                 return; // 阻止提交
+            }
+            const etcId = car.etcId;
             
             const mileage = document.getElementById('record-mileage').value;
             const notes = document.getElementById('record-notes').value || '';
