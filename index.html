@@ -166,7 +166,7 @@
                 </div>
                 
                 <div>
-                    <label for="record-plate" class="block text-sm font-medium text-gray-700">車牌 (ETC 卡號)</label>
+                    <label for="record-plate" class="block tock text-sm font-medium text-gray-700">車牌 (ETC 卡號)</label>
                     <select id="record-plate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="" disabled selected>載入車隊...</option>
                     </select>
@@ -593,7 +593,15 @@
                 return '3333 7座';
             }
             
-            return fullPlate;
+            // 針對新車牌的防呆處理：安全返回車牌的一部分
+            // 嘗試提取車牌號碼的最後四位或一個簡短標籤
+            const match = fullPlate.match(/\d{4}/); 
+            if (match) {
+                return fullPlate.substring(fullPlate.lastIndexOf(match[0]));
+            }
+            
+            // 如果無法解析，則取前 15 個字元並加上...
+            return fullPlate.length > 15 ? fullPlate.substring(0, 15) + '...' : fullPlate;
         }
 
         /** 設置地點 Datalist 選項 */
@@ -1639,7 +1647,8 @@
             // 模態視窗的輸入欄位
             const collectionDate = document.getElementById('collection-date').value;
             const collectionTime = document.getElementById('collection-time').value;
-            const collectionLocation = collectionLocationSelect.value.trim(); // 從 Input 獲取值並清理
+            // 修正：確保從模態視窗中的 Input 欄位獲取值
+            const collectionLocation = document.getElementById('collection-location').value.trim(); 
             const endMileageInput = document.getElementById('end-mileage').value;
             
             const updateData = {};
