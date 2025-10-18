@@ -233,15 +233,15 @@
                 <input type="hidden" id="modal-mode"> <div class="grid grid-cols-2 gap-4">
                     <div id="modal-date-container">
                         <label for="collection-date" class="block text-sm font-medium text-gray-700">收車日期</label>
-                        <input type="date" id="collection-date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        <input type="date" id="collection-date" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     <div id="modal-time-container">
                         <label for="collection-time" class="block text-sm font-medium text-gray-700">收車時間</label>
-                        <input type="time" id="collection-time" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        <input type="time" id="collection-time" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     <div class="col-span-2" id="modal-location-container">
                         <label for="collection-location" class="block text-sm font-medium text-gray-700">收車地點</label>
-                        <input type="text" id="collection-location" list="location-list" placeholder="請選擇或輸入收車地點" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                        <input type="text" id="collection-location" list="location-list" placeholder="請選擇或輸入收車地點" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     <div class="col-span-2" id="modal-mileage-container">
                         <label for="end-mileage" class="block text-sm font-medium text-gray-700">結束里程數 (Km)</label>
@@ -808,6 +808,12 @@
             // 清除上次的輸入值
             document.getElementById('end-mileage').value = ''; 
             
+            // 獲取日期/時間/地點欄位
+            const collectionDateInput = document.getElementById('collection-date');
+            const collectionTimeInput = document.getElementById('collection-time');
+            const collectionLocationInput = document.getElementById('collection-location');
+
+
             if (mode === 'mileage') {
                 // --- 模式 2: 僅登錄里程 ---
                 modalTitle.textContent = '登錄結束里程數 (完成結算)';
@@ -818,7 +824,13 @@
                 document.getElementById('modal-location-container').classList.add('hidden');
                 document.getElementById('modal-mileage-container').classList.remove('col-span-2');
                 document.getElementById('modal-mileage-container').classList.add('col-span-2');
+
+                // 在 'mileage' 模式下，非里程欄位不需要必填
+                collectionDateInput.required = false;
+                collectionTimeInput.required = false;
+                collectionLocationInput.required = false;
                 document.getElementById('end-mileage').required = true;
+
                 
             } else {
                 // --- 模式 1: 記錄時間/地點 (full) ---
@@ -830,13 +842,17 @@
                 document.getElementById('modal-location-container').classList.remove('hidden');
                 document.getElementById('modal-mileage-container').classList.remove('col-span-2'); 
                 
+                // 在 'full' 模式下，時間/地點是必填的
+                collectionDateInput.required = true;
+                collectionTimeInput.required = true;
+                collectionLocationInput.required = true;
                 document.getElementById('end-mileage').required = false; 
                 
                 // 預設日期和時間
                 const today = new Date().toISOString().split('T')[0];
                 const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
-                document.getElementById('collection-date').value = record.collectionDate || today;
-                document.getElementById('collection-time').value = record.collectionTime || nowTime;
+                collectionDateInput.value = record.collectionDate || today;
+                collectionTimeInput.value = record.collectionTime || nowTime;
                 
             }
 
@@ -1423,7 +1439,7 @@
                 // --- 2. 詳細內容 DIV (Detail Row) - 預設隱藏 ---
                 const detailDiv = document.createElement('div');
                 detailDiv.id = `detail-row-${recordId}`;
-                detailDiv.className = "hidden p-3 bg-gray-50 border-t border-gray-200"; // FIX: detailDiv.className is used instead of detailRow.className 
+                detailDiv.className = "hidden p-3 bg-gray-50 border-t border-gray-200"; 
                 
                 // 處理客戶資訊顯示
                 const customerInfo = (record.customerName || record.customerPhone || record.customerDob) ? `
