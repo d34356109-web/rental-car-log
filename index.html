@@ -675,6 +675,7 @@
             const recordId = document.getElementById('modal-record-id').value;
             const mode = document.getElementById('modal-mode').value;
             
+            // 模態視窗的輸入欄位
             const collectionDate = document.getElementById('collection-date').value;
             const collectionTime = document.getElementById('collection-time').value;
             const collectionLocation = collectionLocationSelect.value.trim(); // 從 Input 獲取值並清理
@@ -739,6 +740,11 @@
                 }
                 
                 updateData.endMileage = endMileage;
+                
+                // **關鍵修正**：在里程結算模式下，我們不需要修改日期和地點，但它們在資料庫中必須有值。
+                // 如果是從舊紀錄切換過來，這些值可能不存在於模態視窗的 input 中，但應該保持 record 的舊值。
+                // (注意：在此模式下，這些欄位被 hidden，但在 updateDoc 中不傳遞它們，它們的值保持不變)
+
             }
 
             try {
@@ -795,6 +801,13 @@
             
             const modalTitle = document.getElementById('modal-title');
             const modalModeInput = document.getElementById('modal-mode');
+            
+            // 獲取日期/時間/地點欄位
+            const collectionDateInput = document.getElementById('collection-date');
+            const collectionTimeInput = document.getElementById('collection-time');
+            const collectionLocationInput = document.getElementById('collection-location');
+            const endMileageInput = document.getElementById('end-mileage');
+
 
             // 設置通用值
             document.getElementById('modal-record-id').value = recordId;
@@ -803,15 +816,22 @@
             modalModeInput.value = mode;
 
             // 設置收車地點 Input 值
-            collectionLocationSelect.value = record.collectionLocation || '';
+            collectionLocationInput.value = record.collectionLocation || '';
 
             // 清除上次的輸入值
-            document.getElementById('end-mileage').value = ''; 
+            endMileageInput.value = ''; 
             
-            // 獲取日期/時間/地點欄位
-            const collectionDateInput = document.getElementById('collection-date');
-            const collectionTimeInput = document.getElementById('collection-time');
-            const collectionLocationInput = document.getElementById('collection-location');
+            // --- 預設設置：兩種模式都設為非必填，然後再依模式覆蓋 ---
+            collectionDateInput.required = false;
+            collectionTimeInput.required = false;
+            collectionLocationInput.required = false;
+            endMileageInput.required = false;
+            
+            // 重設隱藏 class
+            document.getElementById('modal-date-container').classList.remove('hidden');
+            document.getElementById('modal-time-container').classList.remove('hidden');
+            document.getElementById('modal-location-container').classList.remove('hidden');
+            document.getElementById('modal-mileage-container').classList.remove('col-span-2');
 
 
             if (mode === 'mileage') {
@@ -819,34 +839,24 @@
                 modalTitle.textContent = '登錄結束里程數 (完成結算)';
                 document.getElementById('collection-submit-btn').textContent = '確認登錄並完成結算';
                 
+                // 隱藏日期/時間/地點
                 document.getElementById('modal-date-container').classList.add('hidden');
                 document.getElementById('modal-time-container').classList.add('hidden');
                 document.getElementById('modal-location-container').classList.add('hidden');
-                document.getElementById('modal-mileage-container').classList.remove('col-span-2');
                 document.getElementById('modal-mileage-container').classList.add('col-span-2');
 
-                // 在 'mileage' 模式下，非里程欄位不需要必填
-                collectionDateInput.required = false;
-                collectionTimeInput.required = false;
-                collectionLocationInput.required = false;
-                document.getElementById('end-mileage').required = true;
-
+                // 里程是必填
+                endMileageInput.required = true;
                 
             } else {
                 // --- 模式 1: 記錄時間/地點 (full) ---
                 modalTitle.textContent = '記錄收車時間與地點';
                 document.getElementById('collection-submit-btn').textContent = '確認並儲存收車時間';
 
-                document.getElementById('modal-date-container').classList.remove('hidden');
-                document.getElementById('modal-time-container').classList.remove('hidden');
-                document.getElementById('modal-location-container').classList.remove('hidden');
-                document.getElementById('modal-mileage-container').classList.remove('col-span-2'); 
-                
-                // 在 'full' 模式下，時間/地點是必填的
+                // 日期/時間/地點是必填的
                 collectionDateInput.required = true;
                 collectionTimeInput.required = true;
                 collectionLocationInput.required = true;
-                document.getElementById('end-mileage').required = false; 
                 
                 // 預設日期和時間
                 const today = new Date().toISOString().split('T')[0];
