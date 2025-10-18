@@ -416,7 +416,7 @@
             projectId: "rentalcarlog-app",
             storageBucket: "rentalcarlog-app.firebasestorage.app",
             messagingSenderId: "68461236293",
-            appId: "1:68461236293:web:2ab0179cc52585ab74932c",
+            appId: "1:68461236293:web:2ab0179cc52585ab749932c",
             measurementId: "G-C7LWGH36JY"
         };
         const YOUR_PROJECT_ID = "rentalcarlog-app"; 
@@ -1552,12 +1552,13 @@
             
             // 取得 ETC ID (現在從 allFleet 獲取)
             const car = allFleet.find(f => f.plate === plate);
-            const etcId = car ? car.etcId : null; 
+            // 修正: 確保 etcId 即使找不到也有一個值，避免阻止儲存
+            const etcId = car ? car.etcId : '未知/手動新增'; 
             
             const mileage = document.getElementById('record-mileage').value;
             const notes = document.getElementById('record-notes').value || '';
 
-            if (!plate || !etcId) {
+            if (!plate) { // 檢查 plate 即可，etcId 允許未知
                 displayMessage("請選擇車牌，或透過「管理車隊」新增車輛。", 'error');
                 document.getElementById('submit-button').disabled = false;
                 return;
