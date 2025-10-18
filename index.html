@@ -854,7 +854,7 @@
                     record.notes.toLowerCase().includes(searchTerm) ||
                     (record.customerName && record.customerName.toLowerCase().includes(searchTerm)) ||
                     (record.customerPhone && record.customerPhone.toLowerCase().includes(searchTerm)) ||
-                    record.etcId.toLowerCase().includes(searchTerm)
+                    (record.etcId && record.etcId.toLowerCase().includes(searchTerm))
                 );
             });
 
@@ -1345,21 +1345,16 @@
                 
                 allRecords = records; // 更新全局紀錄列表
                 
+                // === 修正：使用 requestAnimationFrame 和延遲確保 DOM 更新完成 ===
+                window.requestAnimationFrame(() => {
+                    // 確保 DOM 已經準備好進行渲染
+                    setTimeout(() => {
+                        renderRecords(allRecords); // 渲染列表和觸發提示/日曆更新
+                    }, 50); // 設置 50ms 延遲，等待 Firebase 數據處理完成
+                });
+                // =========================================================
+
                 // DEBUG: 這裡不需要額外的 console.log，renderRecords 已經有 console.log 了
-                renderRecords(allRecords); // 渲染列表
-                
-                // === 防呆機制：過濾已租出的車輛 (使用當前表單時間) ===
-                const date = document.getElementById('record-date').value;
-                const time = document.getElementById('record-time').value;
-                
-                let unavailablePlates = [];
-                if (date && time) {
-                     unavailablePlates = getUnavailablePlatesForTime(allRecords, createDateTime(date, time));
-                }
-                setupPlateEtcMapping(unavailablePlates);
-                // ======================================
-                
-                updateScheduleTip(); // <-- Call the new function here, which also calls renderCalendar
                 
                 // !!! 新增除錯紀錄: 顯示讀取到的紀錄數量 !!!
                 console.log("資料已更新 (Firestore 讀取數量):", records.length, "筆紀錄");
