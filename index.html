@@ -82,6 +82,7 @@
         
         // --- GLOBAL FIREBASE/APP SETUP ---
         setLogLevel('Debug');
+        // IMPORTANT: These global variables are provided by the Canvas environment for security reasons.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 
@@ -106,27 +107,20 @@
         async function initializeFirebase() {
             try {
                 if (Object.keys(firebaseConfig).length === 0) {
-                    console.warn("Firebase config not available. Using mock data path.");
-                    // Still need an identifier if running without Canvas auth
+                    console.warn("Firebase config not available. Assuming running outside Canvas.");
+                    // Fallback for non-Canvas environments (use random UUID and proceed)
                     userId = crypto.randomUUID(); 
                     isAuthReady = true;
-                    startListeners(); // Start listeners even if using mock path
+                    document.getElementById('userIdDisplay').textContent = `User ID: (Mock) ${userId}`;
+                    startListeners(); 
                     return;
                 }
                 
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-
-                // Sign in using custom token or anonymously
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // Wait for auth state change to get the final userId
+                
+                // Track auth state explicitly for external hosting environments
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
@@ -136,17 +130,57 @@
                         checkAndInitializeInventory();
                         startListeners();
                     } else {
-                        console.log("No user signed in.");
+                        // User logged out or initial state, try to sign in
+                        if (auth.currentUser === null && !isAuthReady) {
+                             console.log("Attempting sign-in...");
+                             performSignIn();
+                        } else {
+                            console.log("No user signed in after attempt.");
+                        }
                     }
                 });
+                
+                // Initial check for existing user (for persistence)
+                if (auth.currentUser) {
+                    userId = auth.currentUser.uid;
+                    isAuthReady = true;
+                    document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
+                    checkAndInitializeInventory();
+                    startListeners();
+                } else if (!isAuthReady) {
+                     // If no user detected immediately, attempt sign-in
+                     performSignIn();
+                }
+
 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                // Fallback: Use a random UUID if auth fails completely
+                // Fallback: If auth fails, use a random UUID and proceed
                 userId = crypto.randomUUID(); 
                 isAuthReady = true;
+                document.getElementById('userIdDisplay').textContent = `User ID: (Fallback) ${userId}`;
                 startListeners();
             }
+        }
+        
+        async function performSignIn() {
+             const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+             try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                    console.log("Signed in with custom token.");
+                } else {
+                    await signInAnonymously(auth);
+                    console.log("Signed in anonymously.");
+                }
+             } catch(error) {
+                 console.error("Sign-in failed:", error);
+                 // Fallback if sign-in fails
+                 userId = crypto.randomUUID();
+                 isAuthReady = true;
+                 document.getElementById('userIdDisplay').textContent = `User ID: (Auth Fail) ${userId}`;
+                 startListeners();
+             }
         }
 
         // --- DATA INITIALIZATION ---
@@ -190,6 +224,11 @@
 
             const vehiclesCollectionPath = getCollectionPath(VEHICLES_COLLECTION);
             const ordersCollectionPath = getCollectionPath(ORDERS_COLLECTION);
+            
+            // Render loading state if listeners haven't run yet
+            if (vehicles.length === 0) {
+                 document.getElementById('vehicleInventory').innerHTML = '<div class="p-4 bg-gray-100 rounded-xl text-center text-gray-500">正在連接資料庫，請稍候...</div>';
+            }
 
             if (db && vehiclesCollectionPath) {
                 onSnapshot(collection(db, vehiclesCollectionPath), (snapshot) => {
@@ -216,6 +255,12 @@
         function renderVehicleInventory() {
             const container = document.getElementById('vehicleInventory');
             container.innerHTML = '';
+
+            if (vehicles.length === 0) {
+                 container.innerHTML = '<p class="text-center text-gray-500 col-span-full">目前庫存中無車輛。請點擊「+ 新增庫存車輛」添加。</p>';
+                 return;
+            }
+
 
             vehicles.forEach(v => {
                 const card = document.createElement('div');
@@ -263,6 +308,11 @@
 
             // Sort orders by pickup time (descending: newest first)
             const sortedOrders = [...orders].sort((a, b) => new Date(b.pickupTime) - new Date(a.pickupTime));
+
+            if (sortedOrders.length === 0) {
+                 container.innerHTML = '<p class="text-center text-gray-500">目前無租賃訂單。</p>';
+                 return;
+            }
 
             sortedOrders.forEach((order) => {
                 const pickupDate = new Date(order.pickupTime);
