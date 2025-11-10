@@ -82,9 +82,32 @@
         
         // --- GLOBAL FIREBASE/APP SETUP ---
         setLogLevel('Debug');
-        // IMPORTANT: These global variables are provided by the Canvas environment for security reasons.
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        // *** EXTERNAL FIREBASE CONFIGURATION (FOR GITHUB PAGES) ***
+        const EXTERNAL_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAqksNR1a1Tf4OgL8X2ezT8u5rlFygNHPc",
+            authDomain: "rentalcarlog-app.firebaseapp.com",
+            projectId: "rentalcarlog-app",
+            storageBucket: "rentalcarlog-app.firebasestorage.app",
+            messagingSenderId: "68461236293",
+            appId: "1:68461236293:web:2ab0179cc52585ab74932c",
+            measurementId: "G-C7LWGH36JY"
+        };
+        // Extract the required numeric appId part for Firestore path
+        const EXTERNAL_APP_ID = EXTERNAL_FIREBASE_CONFIG.appId.split(':')[1];
+        
+        // Determine configuration source: Use External Config if Canvas variables are missing/empty
+        const useExternalConfig = typeof __firebase_config === 'undefined' || Object.keys(__firebase_config).length === 0;
+
+        const appId = useExternalConfig 
+            ? EXTERNAL_APP_ID // Use the extracted ID from user's config
+            : (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'); // Use Canvas ID
+
+        const firebaseConfig = useExternalConfig 
+            ? EXTERNAL_FIREBASE_CONFIG // Use user's external config
+            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {}); // Use Canvas config
+
+        // End of configuration determination
 
         let app, db, auth, userId = null;
         let vehicles = []; // Global store for vehicle inventory
@@ -97,7 +120,7 @@
         // Utility function to get collection path for current user
         function getCollectionPath(basePath) {
             if (!userId) {
-                console.error("UserID not available.");
+                console.error("UserID not available. Cannot form collection path.");
                 return null;
             }
             return basePath.replace('{userId}', userId);
@@ -107,20 +130,39 @@
         async function initializeFirebase() {
             try {
                 if (Object.keys(firebaseConfig).length === 0) {
-                    console.warn("Firebase config not available. Assuming running outside Canvas.");
-                    // Fallback for non-Canvas environments (use random UUID and proceed)
+                    // This should no longer happen if EXTERNAL_FIREBASE_CONFIG is set
+                    console.error("Firebase config is empty. Cannot initialize.");
                     userId = crypto.randomUUID(); 
                     isAuthReady = true;
-                    document.getElementById('userIdDisplay').textContent = `User ID: (Mock) ${userId}`;
-                    startListeners(); 
+                    document.getElementById('userIdDisplay').textContent = `User ID: (FAIL) ${userId}`;
+                    startListeners();
                     return;
                 }
                 
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
+
+                // Sign in using custom token or anonymously
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                 
-                // Track auth state explicitly for external hosting environments
+                if (useExternalConfig) {
+                    // When deployed externally (GitHub Pages), we rely purely on anonymous sign-in 
+                    // since __initial_auth_token is not available.
+                    await signInAnonymously(auth);
+                    console.log("Signed in anonymously using external config.");
+                } else if (initialAuthToken) {
+                    // Running inside Canvas
+                    await signInWithCustomToken(auth, initialAuthToken);
+                    console.log("Signed in with custom token (Canvas).");
+                } else {
+                    // Canvas fallback if token is missing
+                    await signInAnonymously(auth);
+                    console.log("Signed in anonymously (Canvas fallback).");
+                }
+
+
+                // Wait for auth state change to get the final userId
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
@@ -130,57 +172,18 @@
                         checkAndInitializeInventory();
                         startListeners();
                     } else {
-                        // User logged out or initial state, try to sign in
-                        if (auth.currentUser === null && !isAuthReady) {
-                             console.log("Attempting sign-in...");
-                             performSignIn();
-                        } else {
-                            console.log("No user signed in after attempt.");
-                        }
+                        console.log("No user signed in after attempt.");
                     }
                 });
-                
-                // Initial check for existing user (for persistence)
-                if (auth.currentUser) {
-                    userId = auth.currentUser.uid;
-                    isAuthReady = true;
-                    document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                    checkAndInitializeInventory();
-                    startListeners();
-                } else if (!isAuthReady) {
-                     // If no user detected immediately, attempt sign-in
-                     performSignIn();
-                }
-
 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                // Fallback: If auth fails, use a random UUID and proceed
+                // Fallback: Use a random UUID if auth fails completely
                 userId = crypto.randomUUID(); 
                 isAuthReady = true;
-                document.getElementById('userIdDisplay').textContent = `User ID: (Fallback) ${userId}`;
+                document.getElementById('userIdDisplay').textContent = `User ID: (Auth Error) ${userId}`;
                 startListeners();
             }
-        }
-        
-        async function performSignIn() {
-             const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-             try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                    console.log("Signed in with custom token.");
-                } else {
-                    await signInAnonymously(auth);
-                    console.log("Signed in anonymously.");
-                }
-             } catch(error) {
-                 console.error("Sign-in failed:", error);
-                 // Fallback if sign-in fails
-                 userId = crypto.randomUUID();
-                 isAuthReady = true;
-                 document.getElementById('userIdDisplay').textContent = `User ID: (Auth Fail) ${userId}`;
-                 startListeners();
-             }
         }
 
         // --- DATA INITIALIZATION ---
@@ -224,11 +227,6 @@
 
             const vehiclesCollectionPath = getCollectionPath(VEHICLES_COLLECTION);
             const ordersCollectionPath = getCollectionPath(ORDERS_COLLECTION);
-            
-            // Render loading state if listeners haven't run yet
-            if (vehicles.length === 0) {
-                 document.getElementById('vehicleInventory').innerHTML = '<div class="p-4 bg-gray-100 rounded-xl text-center text-gray-500">正在連接資料庫，請稍候...</div>';
-            }
 
             if (db && vehiclesCollectionPath) {
                 onSnapshot(collection(db, vehiclesCollectionPath), (snapshot) => {
@@ -260,7 +258,6 @@
                  container.innerHTML = '<p class="text-center text-gray-500 col-span-full">目前庫存中無車輛。請點擊「+ 新增庫存車輛」添加。</p>';
                  return;
             }
-
 
             vehicles.forEach(v => {
                 const card = document.createElement('div');
@@ -1003,14 +1000,12 @@
 
             modals.forEach(({ id, close }) => {
                 const modal = document.getElementById(id);
-                if (modal) {
+                    // Check if the click target is the modal backdrop itself (not children)
                     modal.addEventListener('click', (e) => {
-                        // Check if the click target is the modal backdrop itself (not children)
                         if (e.target === modal) {
                             close();
                         }
                     });
-                }
             });
         }
 
