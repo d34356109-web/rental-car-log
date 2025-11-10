@@ -84,6 +84,7 @@
         setLogLevel('Debug');
 
         // *** EXTERNAL FIREBASE CONFIGURATION (FOR GITHUB PAGES) ***
+        // 這是您提供的 Firebase 配置，用於 GitHub Pages 環境
         const EXTERNAL_FIREBASE_CONFIG = {
             apiKey: "AIzaSyAqksNR1a1Tf4OgL8X2ezT8u5rlFygNHPc",
             authDomain: "rentalcarlog-app.firebaseapp.com",
@@ -93,19 +94,20 @@
             appId: "1:68461236293:web:2ab0179cc52585ab74932c",
             measurementId: "G-C7LWGH36JY"
         };
-        // Extract the required numeric appId part for Firestore path
+        // 從 appId 提取數字部分作為 Firestore 路徑所需的 App ID
         const EXTERNAL_APP_ID = EXTERNAL_FIREBASE_CONFIG.appId.split(':')[1];
         
-        // Determine configuration source: Use External Config if Canvas variables are missing/empty
-        const useExternalConfig = typeof __firebase_config === 'undefined' || Object.keys(__firebase_config).length === 0;
+        // 修正後的配置判斷邏輯：
+        // 檢查 Canvas 專用變數是否存在，不存在則使用外部配置 (適用於 GitHub Pages)
+        const useExternalConfig = typeof __firebase_config === 'undefined';
 
         const appId = useExternalConfig 
-            ? EXTERNAL_APP_ID // Use the extracted ID from user's config
-            : (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'); // Use Canvas ID
+            ? EXTERNAL_APP_ID // GitHub Pages 使用您配置中的 ID
+            : (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'); // Canvas 環境使用 Canvas ID
 
         const firebaseConfig = useExternalConfig 
-            ? EXTERNAL_FIREBASE_CONFIG // Use user's external config
-            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {}); // Use Canvas config
+            ? EXTERNAL_FIREBASE_CONFIG // GitHub Pages 使用您提供的配置
+            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {}); // Canvas 環境使用 Canvas 配置
 
         // End of configuration determination
 
@@ -130,11 +132,11 @@
         async function initializeFirebase() {
             try {
                 if (Object.keys(firebaseConfig).length === 0) {
-                    // This should no longer happen if EXTERNAL_FIREBASE_CONFIG is set
-                    console.error("Firebase config is empty. Cannot initialize.");
+                    // 如果配置仍為空，表示發生錯誤 (不應該發生在外部部署時)
+                    console.error("Firebase config is empty. Initialization failed.");
                     userId = crypto.randomUUID(); 
                     isAuthReady = true;
-                    document.getElementById('userIdDisplay').textContent = `User ID: (FAIL) ${userId}`;
+                    document.getElementById('userIdDisplay').textContent = `User ID: (INIT FAIL) ${userId}`;
                     startListeners();
                     return;
                 }
@@ -147,16 +149,15 @@
                 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                 
                 if (useExternalConfig) {
-                    // When deployed externally (GitHub Pages), we rely purely on anonymous sign-in 
-                    // since __initial_auth_token is not available.
+                    // 外部部署 (GitHub Pages)：使用匿名登入
                     await signInAnonymously(auth);
-                    console.log("Signed in anonymously using external config.");
+                    console.log("Signed in anonymously using external config (GitHub Pages).");
                 } else if (initialAuthToken) {
-                    // Running inside Canvas
+                    // Canvas 環境：使用自定義 token
                     await signInWithCustomToken(auth, initialAuthToken);
                     console.log("Signed in with custom token (Canvas).");
                 } else {
-                    // Canvas fallback if token is missing
+                    // Canvas 環境：Fallback 匿名登入
                     await signInAnonymously(auth);
                     console.log("Signed in anonymously (Canvas fallback).");
                 }
@@ -177,7 +178,7 @@
                 });
 
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
+                console.error("Firebase Initialization Error (Check API Key/Rules):", error);
                 // Fallback: Use a random UUID if auth fails completely
                 userId = crypto.randomUUID(); 
                 isAuthReady = true;
@@ -1000,12 +1001,14 @@
 
             modals.forEach(({ id, close }) => {
                 const modal = document.getElementById(id);
-                    // Check if the click target is the modal backdrop itself (not children)
+                if (modal) {
                     modal.addEventListener('click', (e) => {
+                        // Check if the click target is the modal backdrop itself (not children)
                         if (e.target === modal) {
                             close();
                         }
                     });
+                }
             });
         }
 
