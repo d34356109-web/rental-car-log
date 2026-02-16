@@ -29,6 +29,7 @@
         body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
         /* 隱藏未載入時的閃爍 */
         #root:empty { display: none; }
+        .transition-max-height { transition: max-height 0.3s ease-in-out; }
     </style>
 </head>
 <body>
@@ -41,7 +42,8 @@
         import { 
             Calendar, Car, Users, CreditCard, Snowflake, Sun,
             Plus, Search, Edit3, Trash2, Clock, Save, X, 
-            LogOut, ShieldCheck, Database, CheckCircle, ArrowRight
+            LogOut, ShieldCheck, Database, CheckCircle, ArrowRight, AlertCircle,
+            ChevronDown, ChevronUp, BellRing
         } from 'lucide-react';
 
         // --- Firebase SDK ---
@@ -90,6 +92,9 @@
             const [orders, setOrders] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
             
+            // UI State for Expanded Cards
+            const [expandedCards, setExpandedCards] = useState({});
+
             const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
             const [editingOrder, setEditingOrder] = useState(null);
             const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
@@ -127,6 +132,14 @@
                 return () => unsubscribe();
             }, []);
 
+            // Toggle Expand
+            const toggleExpand = (id) => {
+                setExpandedCards(prev => ({
+                    ...prev,
+                    [id]: !prev[id]
+                }));
+            };
+
             // Helpers
             const formatDateTime = (iso) => {
                 if (!iso) return '';
@@ -134,19 +147,26 @@
                 return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
             };
             
-            // 格式化時間 (HH:mm)
-            const formatTime = (iso) => {
+            const formatTimeOnly = (iso) => {
                 if (!iso) return '';
                 const d = new Date(iso);
                 return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
             };
 
-            // 修改邏輯：取得該日期所有訂單 (回傳陣列)
-            const getVehicleOrdersForDate = (vid, dateStr) => {
+            // 取得當日訂單 (用於計算狀態)
+            const getDayOrders = (vid, dateStr) => {
                 const startOfDay = new Date(`${dateStr}T00:00:00`);
                 const endOfDay = new Date(`${dateStr}T23:59:59`);
                 return orders
                     .filter(o => o.vehicleId === vid && o.status !== 'cancelled' && new Date(o.start) < endOfDay && new Date(o.end) > startOfDay)
+                    .sort((a, b) => new Date(a.start) - new Date(b.start));
+            };
+
+            // 取得完整排程 (當日 + 未來，用於展開列表)
+            const getVehicleSchedule = (vid, dateStr) => {
+                const startOfDay = new Date(`${dateStr}T00:00:00`);
+                return orders
+                    .filter(o => o.vehicleId === vid && o.status !== 'cancelled' && new Date(o.end) > startOfDay)
                     .sort((a, b) => new Date(a.start) - new Date(b.start));
             };
 
@@ -156,13 +176,47 @@
                 return !orders.some(o => o.vehicleId === vid && o.id !== excludeId && o.status !== 'cancelled' && s < new Date(o.end) && e > new Date(o.start));
             };
 
-            // 判斷訂單在當天是否正在進行中
             const isOrderActiveNow = (order) => {
-                const now = new Date(); // 使用當前時間
+                const now = new Date();
                 const start = new Date(order.start);
                 const end = new Date(order.end);
                 return now >= start && now <= end;
             };
+
+            // Sorting Logic for Dashboard
+            const sortedVehicles = useMemo(() => {
+                const vehiclesWithStatus = vehicles.map(v => {
+                    const dayOrders = getDayOrders(v.id, filterDate);
+                    const activeOrder = dayOrders.find(o => isOrderActiveNow(o));
+                    const now = new Date();
+                    const futureOrders = dayOrders.filter(o => !isOrderActiveNow(o) && new Date(o.start) > now);
+                    
+                    // 決定排序權重 (越小越前面)
+                    let sortWeight = 999; 
+                    let sortTime = 0; 
+
+                    if (activeOrder) {
+                        // 第一優先：正在出租 (看誰先還車)
+                        sortWeight = 1;
+                        sortTime = new Date(activeOrder.end).getTime();
+                    } else if (futureOrders.length > 0) {
+                        // 第二優先：即將有預約 (看誰先交車)
+                        sortWeight = 2;
+                        sortTime = new Date(futureOrders[0].start).getTime();
+                    } else {
+                        // 第三：空車
+                        sortWeight = 3;
+                    }
+
+                    return { ...v, dayOrders, activeOrder, futureOrders, sortWeight, sortTime };
+                });
+
+                return vehiclesWithStatus.sort((a, b) => {
+                    if (a.sortWeight !== b.sortWeight) return a.sortWeight - b.sortWeight;
+                    return a.sortTime - b.sortTime;
+                });
+            }, [vehicles, orders, filterDate]);
+
 
             // Actions
             const handleSaveOrder = async (e) => {
@@ -230,89 +284,166 @@
                         {activeTab === 'dashboard' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
-                                    <h2 className="font-bold">看板</h2>
-                                    <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="border rounded p-1" />
+                                    <h2 className="font-bold flex items-center gap-2"><BellRing size={18} className="text-blue-600"/> 車輛調度看板</h2>
+                                    <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="border rounded p-1 font-medium text-slate-700" />
+                                </div>
+                                <div className="text-xs text-gray-500 px-2 flex justify-between">
+                                    <span>排序：🔴還車優先 -> 🟡交車優先 -> 🟢空車</span>
                                 </div>
                                 <div className="space-y-3">
-                                    {vehicles.map(v => {
-                                        const dayOrders = getVehicleOrdersForDate(v.id, filterDate);
-                                        const activeOrder = dayOrders.find(o => isOrderActiveNow(o));
-                                        const futureOrders = dayOrders.filter(o => !isOrderActiveNow(o) && new Date(o.start) > new Date());
+                                    {sortedVehicles.map(v => {
+                                        const dayOrders = v.dayOrders; // 當日行程 (用於狀態標籤)
+                                        const scheduleOrders = getVehicleSchedule(v.id, filterDate); // 完整排程 (用於展開列表)
+                                        
+                                        const activeOrder = v.activeOrder;
+                                        const futureOrders = v.futureOrders;
                                         const isRentedNow = !!activeOrder;
+                                        const isExpanded = !!expandedCards[v.id];
 
                                         return (
-                                            <div key={v.id} className={`bg-white p-4 rounded shadow-sm border-l-4 ${isRentedNow ? 'border-l-red-500' : (futureOrders.length > 0 ? 'border-l-yellow-400' : 'border-l-green-500')}`}>
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div>
-                                                        <div className="font-bold text-lg">{v.plate}</div>
-                                                        <div className="text-sm text-gray-500">
-                                                            {v.model} {v.feature ? ` / ${v.feature}` : ''} {v.tire ? ` (${v.tire})` : ''}
+                                            <div 
+                                                key={v.id} 
+                                                className={`bg-white rounded shadow-sm border-l-4 transition-all duration-200 cursor-pointer hover:shadow-md
+                                                    ${isRentedNow ? 'border-l-red-500' : (futureOrders.length > 0 ? 'border-l-yellow-400' : 'border-l-green-500')}
+                                                `}
+                                                onClick={() => toggleExpand(v.id)}
+                                            >
+                                                {/* Card Header */}
+                                                <div className="p-4">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div>
+                                                            <div className="font-bold text-lg text-slate-800">{v.plate}</div>
+                                                            <div className="text-sm text-gray-500">
+                                                                {v.model} {v.feature ? ` / ${v.feature}` : ''} {v.tire ? ` (${v.tire})` : ''}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* Status Badges (Stacked) */}
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            {dayOrders.length === 0 && (
+                                                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold">空車</span>
+                                                            )}
+                                                            {isRentedNow && (
+                                                                <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-bold animate-pulse flex items-center gap-1">
+                                                                    <Clock size={12}/> 出租中
+                                                                </span>
+                                                            )}
+                                                            {/* 只要行程表裡有未來的訂單，就顯示預約訂單標籤 */}
+                                                            {scheduleOrders.some(o => new Date(o.start) > new Date()) && (
+                                                                <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700 font-bold flex items-center gap-1">
+                                                                    <AlertCircle size={12}/> 預約訂單
+                                                                </span>
+                                                            )}
+                                                            <div className="mt-1 text-gray-400">
+                                                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex flex-col items-end gap-1">
-                                                        {dayOrders.length === 0 && <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold">空車</span>}
-                                                        {isRentedNow && <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-bold animate-pulse">出租中</span>}
-                                                        {futureOrders.length > 0 && <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700 font-bold">
-                                                            {isRentedNow ? `後續 ${futureOrders.length} 預約` : `預約中 (${futureOrders.length})`}
-                                                        </span>}
-                                                    </div>
+
+                                                    {/* Key Time Reminder (Always Visible) */}
+                                                    {!isExpanded && (
+                                                        <div className="mt-2 pt-2 border-t border-dashed border-gray-100">
+                                                            {activeOrder ? (
+                                                                <div className="flex items-center gap-2 text-sm">
+                                                                    <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs font-bold whitespace-nowrap">還車</span>
+                                                                    <span className="font-medium text-slate-800">{formatDateTime(activeOrder.end)}</span>
+                                                                    <span className="text-gray-500 text-xs">({activeOrder.customer})</span>
+                                                                </div>
+                                                            ) : futureOrders.length > 0 ? (
+                                                                <div className="flex items-center gap-2 text-sm">
+                                                                    <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-bold whitespace-nowrap">交車</span>
+                                                                    <span className="font-medium text-slate-800">{formatDateTime(futureOrders[0].start)}</span>
+                                                                    <span className="text-gray-500 text-xs">({futureOrders[0].customer})</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-xs text-gray-400 italic">目前無排程，可隨時派單</div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
 
-                                                {/* 訂單列表 */}
-                                                <div className="space-y-2 relative">
-                                                    {dayOrders.map((order, idx) => {
-                                                        const active = isOrderActiveNow(order);
-                                                        const isPast = new Date(order.end) < new Date();
-                                                        const isFuture = new Date(order.start) > new Date();
-                                                        
-                                                        let statusColor = "bg-gray-50 border-gray-200";
-                                                        let textColor = "text-gray-600";
-                                                        let label = "已結束";
-                                                        
-                                                        if (active) {
-                                                            statusColor = "bg-red-50 border-red-200";
-                                                            textColor = "text-red-700";
-                                                            label = "進行中";
-                                                        } else if (isFuture) {
-                                                            statusColor = "bg-yellow-50 border-yellow-200";
-                                                            textColor = "text-yellow-700";
-                                                            label = "預約";
-                                                        }
+                                                {/* Expanded Details - Schedule List */}
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 border-t bg-slate-50 rounded-b" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="space-y-3 pt-3">
+                                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">詳細行程表 (含未來預約)</div>
+                                                            
+                                                            {scheduleOrders.map((order, idx) => {
+                                                                const active = isOrderActiveNow(order);
+                                                                const isFuture = new Date(order.start) > new Date();
+                                                                
+                                                                let statusColor = "bg-white border-gray-200";
+                                                                let textColor = "text-gray-600";
+                                                                let label = "已結束";
+                                                                let labelClass = "bg-gray-100 text-gray-500";
+                                                                
+                                                                if (active) {
+                                                                    statusColor = "bg-red-50 border-red-200 shadow-sm";
+                                                                    textColor = "text-red-700";
+                                                                    label = "進行中";
+                                                                    labelClass = "bg-red-100 text-red-700 font-bold";
+                                                                } else if (isFuture) {
+                                                                    statusColor = "bg-yellow-50 border-yellow-200";
+                                                                    textColor = "text-yellow-700";
+                                                                    label = "預約";
+                                                                    labelClass = "bg-yellow-100 text-yellow-700 font-bold";
+                                                                }
 
-                                                        return (
-                                                            <div key={order.id} className={`text-sm p-2 rounded border flex justify-between items-center ${statusColor}`}>
-                                                                <div className="flex-1">
-                                                                    <div className="flex justify-between items-center mb-1">
-                                                                        <div className={`font-medium flex items-center gap-2 ${textColor}`}>
-                                                                            {order.customer}
-                                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${active ? 'bg-red-100 border-red-200 text-red-700 font-bold' : (isFuture ? 'bg-yellow-100 border-yellow-200 text-yellow-700 font-bold' : 'bg-gray-200 text-gray-500')}`}>
-                                                                                {label}
-                                                                            </span>
+                                                                return (
+                                                                    <div key={order.id} className={`text-sm p-3 rounded border flex justify-between items-start ${statusColor}`}>
+                                                                        <div className="flex-1">
+                                                                            <div className="flex justify-between items-center mb-1">
+                                                                                <div className={`font-medium flex items-center gap-2 ${textColor} text-base`}>
+                                                                                    {order.customer}
+                                                                                    <span className={`text-[10px] px-2 py-0.5 rounded border ${labelClass}`}>
+                                                                                        {label}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-sm text-slate-700 mt-1 space-y-1">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-green-600 font-medium text-xs w-8">取車</span>
+                                                                                    {formatDateTime(order.start)}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-red-600 font-medium text-xs w-8">還車</span>
+                                                                                    {formatDateTime(order.end)}
+                                                                                </div>
+                                                                                {order.note && <div className="text-xs text-gray-400 mt-1 pl-10 border-l-2 border-gray-200 ml-1">{order.note}</div>}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="text-xs text-gray-600 flex items-center gap-1">
-                                                                        <Clock size={12} className="text-gray-400"/>
-                                                                        {formatTime(order.start)} 
-                                                                        <ArrowRight size={12} className="text-gray-300"/> 
-                                                                        {formatTime(order.end)}
-                                                                        <span className="text-gray-400 ml-1 scale-90 origin-left">
-                                                                            ({formatDateTime(order.start).split(' ')[0]})
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
+                                                                );
+                                                            })}
 
-                                                {/* 派單按鈕 */}
-                                                <button onClick={()=>{
-                                                    setEditingOrder(null);
-                                                    setOrderFormData({customer:'', start:`${filterDate}T10:00`, end:`${filterDate}T18:00`, vehicleId: v.id, note:'', status:'confirmed'});
-                                                    setIsOrderModalOpen(true);
-                                                }} className="mt-3 w-full py-1.5 text-sm border border-dashed border-blue-300 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-1">
-                                                    <Plus size={14}/> 派單
-                                                </button>
+                                                            <button onClick={()=>{
+                                                                setEditingOrder(null);
+                                                                let defaultStart = `${filterDate}T10:00`;
+                                                                if (dayOrders.length > 0) {
+                                                                    const lastEnd = new Date(dayOrders[dayOrders.length-1].end);
+                                                                    lastEnd.setHours(lastEnd.getHours() + 1);
+                                                                    const y = lastEnd.getFullYear();
+                                                                    const m = String(lastEnd.getMonth() + 1).padStart(2, '0');
+                                                                    const d = String(lastEnd.getDate()).padStart(2, '0');
+                                                                    const h = String(lastEnd.getHours()).padStart(2, '0');
+                                                                    const min = String(lastEnd.getMinutes()).padStart(2, '0');
+                                                                    defaultStart = `${y}-${m}-${d}T${h}:${min}`;
+                                                                }
+                                                                setOrderFormData({
+                                                                    customer:'', 
+                                                                    start: defaultStart, 
+                                                                    end: '',
+                                                                    vehicleId: v.id, 
+                                                                    note:'', 
+                                                                    status:'confirmed'
+                                                                });
+                                                                setIsOrderModalOpen(true);
+                                                            }} className="mt-4 w-full py-2.5 text-sm font-medium border border-dashed border-blue-400 text-blue-600 rounded bg-white hover:bg-blue-50 flex items-center justify-center gap-2 transition-colors shadow-sm">
+                                                                <Plus size={16}/> 派單
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     })}
