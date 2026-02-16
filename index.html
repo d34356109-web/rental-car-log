@@ -43,7 +43,7 @@
             Calendar, Car, Users, CreditCard, Snowflake, Sun,
             Plus, Search, Edit3, Trash2, Clock, Save, X, 
             LogOut, ShieldCheck, Database, CheckCircle, ArrowRight, AlertCircle,
-            ChevronDown, ChevronUp, BellRing
+            ChevronDown, ChevronUp, BellRing, AlertTriangle
         } from 'lucide-react';
 
         // --- Firebase SDK ---
@@ -217,6 +217,49 @@
                 });
             }, [vehicles, orders, filterDate]);
 
+            // 一週內行程提醒邏輯 (已排除過去時間)
+            const weeklyReminders = useMemo(() => {
+                const now = new Date(); // 取得當下時間
+                const startWindow = new Date(`${filterDate}T00:00:00`);
+                const endWindow = new Date(startWindow);
+                endWindow.setDate(endWindow.getDate() + 7);
+
+                const events = [];
+                orders.forEach(o => {
+                    if (o.status === 'cancelled') return;
+                    
+                    const startDate = new Date(o.start);
+                    const endDate = new Date(o.end);
+                    const vehicle = vehicles.find(v => v.id === o.vehicleId);
+                    
+                    if (!vehicle) return;
+
+                    // 檢查交車 (Pickup) - 需在搜尋區間內 且 晚於現在時間
+                    if (startDate >= startWindow && startDate <= endWindow && startDate > now) {
+                        events.push({
+                            id: `start-${o.id}`,
+                            type: 'pickup',
+                            time: startDate,
+                            order: o,
+                            vehicle: vehicle
+                        });
+                    }
+
+                    // 檢查還車 (Return) - 需在搜尋區間內 且 晚於現在時間
+                    if (endDate >= startWindow && endDate <= endWindow && endDate > now) {
+                        events.push({
+                            id: `end-${o.id}`,
+                            type: 'return',
+                            time: endDate,
+                            order: o,
+                            vehicle: vehicle
+                        });
+                    }
+                });
+
+                return events.sort((a, b) => a.time - b.time);
+            }, [orders, vehicles, filterDate]);
+
 
             // Actions
             const handleSaveOrder = async (e) => {
@@ -287,7 +330,40 @@
                                     <h2 className="font-bold flex items-center gap-2"><BellRing size={18} className="text-blue-600"/> 車輛調度看板</h2>
                                     <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="border rounded p-1 font-medium text-slate-700" />
                                 </div>
-                                <div className="text-xs text-gray-500 px-2 flex justify-between">
+
+                                {/* 未來一週提醒區塊 */}
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                    <div className="bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 flex justify-between items-center border-b border-slate-200">
+                                        <span>未來 7 日行程提醒 ({weeklyReminders.length})</span>
+                                        <span className="text-[10px] text-slate-400">依時間排序 (已隱藏過期)</span>
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto divide-y divide-slate-100">
+                                        {weeklyReminders.length === 0 ? (
+                                            <div className="p-4 text-center text-xs text-slate-400 italic">未來一週無待辦行程</div>
+                                        ) : (
+                                            weeklyReminders.map(evt => (
+                                                <div key={evt.id} className="p-2 flex items-center gap-3 hover:bg-white text-sm">
+                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap w-12 text-center ${evt.type === 'pickup' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {evt.type === 'pickup' ? '🟡 交車' : '🔴 還車'}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="flex justify-between">
+                                                            <span className="font-bold text-slate-700">{formatDateTime(evt.time)}</span>
+                                                            <span className="text-xs text-slate-500 font-medium">{evt.vehicle.plate}</span>
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 truncate">
+                                                            {evt.order.customer} 
+                                                            <span className="text-slate-300 mx-1">|</span> 
+                                                            {evt.vehicle.model}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="text-xs text-gray-500 px-2 flex justify-between pt-2">
                                     <span>排序：🔴還車優先 -> 🟡交車優先 -> 🟢空車</span>
                                 </div>
                                 <div className="space-y-3">
