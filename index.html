@@ -3,1212 +3,360 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>車輛租賃與調度儀表板</title>
+    <title>車輛訂單管理系統</title>
+    
+    <!-- Tailwind CSS (樣式庫) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-        import 'https://unpkg.com/lucide@latest';
+    
+    <!-- 解決 React 在瀏覽器直接運行的相依性問題 -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "lucide-react": "https://esm.sh/lucide-react@0.292.0",
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+        }
+      }
     </script>
+    
+    <!-- Babel (讓瀏覽器看懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
-        .order-card {
-            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-            cursor: pointer;
-            border-left: 5px solid #E5E7EB; /* Default grey border */
-        }
-        .order-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        .order-card.is-active {
-            border-left-color: #EF4444; /* Red for active */
-        }
-        .order-card.is-upcoming {
-            border-left-color: #3B82F6; /* Blue for upcoming */
-        }
-        .modal {
-            transition: opacity 0.3s ease-in-out;
-        }
-        .hidden { display: none; }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: #fff;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .calendar-day {
-            min-height: 80px;
-            transition: background-color 0.1s;
-        }
-        .calendar-day.has-order {
-            background-color: #D1FAE5; /* Light green/teal */
-            cursor: pointer;
-            position: relative;
-        }
-        .calendar-day.has-order:hover {
-            background-color: #A7F3D0;
-        }
-        .calendar-day-header {
-            font-size: 0.75rem;
-            color: #4B5563;
-        }
-        .calendar-order-count {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: #10B981;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 9999px;
-            font-size: 0.6rem;
-            font-weight: bold;
-        }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
+        /* 隱藏未載入時的閃爍 */
+        #root:empty { display: none; }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body>
+    <div id="root"></div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, where, getDocs, deleteDoc, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        
-        // --- GLOBAL FIREBASE/APP SETUP ---
-        setLogLevel('Debug');
+    <!-- 主程式邏輯 -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Calendar, Car, Users, CreditCard, Snowflake, Sun,
+            Plus, Search, Edit3, Trash2, Clock, Save, X, 
+            LogOut, ShieldCheck, Database
+        } from 'lucide-react';
 
-        // *** EXTERNAL FIREBASE CONFIGURATION (FOR GITHUB PAGES) ***
-        // 這是您提供的 Firebase 配置，用於 GitHub Pages 環境
-        const EXTERNAL_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAqksNR1a1Tf4OgL8X2ezT8u5rlFygNHPc", // 已替換
-            authDomain: "rentalcarlog-app.firebaseapp.com", // 已替換
-            projectId: "rentalcarlog-app", // 已替換
-            storageBucket: "rentalcarlog-app.firebasestorage.app", // 已替換
-            messagingSenderId: "68461236293", // 已替換
-            appId: "1:68461236293:web:2ab0179cc52585ab74932c", // 已替換
-            measurementId: "G-C7LWGH36JY" // 已替換
+        // --- Firebase SDK ---
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+        import { 
+            getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, 
+            serverTimestamp 
+        } from 'firebase/firestore';
+
+        // 🔴 請在這裡填入您的 Firebase 設定 (保留引號) 🔴
+        const firebaseConfig = {
+            apiKey: "AIzaSyDq65URVL5sppv-2yXBh8DQuEwaXm5u5k0",
+            authDomain: "myrentalcarsystem-a88fb.firebaseapp.com",
+            projectId: "myrentalcarsystem-a88fb",
+            storageBucket: "myrentalcarsystem-a88fb.firebasestorage.app",
+            messagingSenderId: "1076727464488",
+            appId: "1:1076727464488:web:9599c788414f5211896b1d"
         };
-        // 從 appId 提取數字部分作為 Firestore 路徑所需的 App ID
-        const EXTERNAL_APP_ID = EXTERNAL_FIREBASE_CONFIG.appId.split(':')[1];
-        
-        // 配置判斷邏輯：檢查 Canvas 專用變數是否存在，不存在則使用外部配置 (適用於 GitHub Pages)
-        const useExternalConfig = typeof __firebase_config === 'undefined';
 
-        const appId = useExternalConfig 
-            ? EXTERNAL_APP_ID // GitHub Pages 使用外部配置 ID
-            : (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'); // Canvas 環境使用 Canvas ID
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        const firebaseConfig = useExternalConfig 
-            ? EXTERNAL_FIREBASE_CONFIG // GitHub Pages 使用外部配置
-            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {}); // Canvas 環境使用 Canvas 配置
-
-        // End of configuration determination
-
-        let app, db, auth, userId = null;
-        let vehicles = []; // Global store for vehicle inventory
-        let orders = [];    // Global store for rental orders
-        let isAuthReady = false;
-
-        // **協作修正**: 更改為公共路徑，以便所有使用者共同管理
-        const VEHICLES_COLLECTION = `artifacts/${appId}/public/data/vehicles`;
-        const ORDERS_COLLECTION = `artifacts/${appId}/public/data/orders`;
-
-        // Utility function to get collection path for current user
-        function getCollectionPath(basePath) {
-            // 對於公共路徑，只需返回路徑本身，無需 userId
-            return basePath; 
-        }
-
-        // Initialize Firebase and Authentication
-        async function initializeFirebase() {
-            try {
-                if (Object.keys(firebaseConfig).length === 0) {
-                    console.error("Firebase config is empty. Initialization failed.");
-                    userId = crypto.randomUUID(); 
-                    isAuthReady = true;
-                    document.getElementById('userIdDisplay').textContent = `User ID: (INIT FAIL) ${userId}`;
-                    startListeners();
-                    return;
-                }
-                
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // Sign in using custom token or anonymously
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                
-                if (useExternalConfig) {
-                    // 外部部署 (GitHub Pages)：使用匿名登入
-                    await signInAnonymously(auth);
-                    console.log("Signed in anonymously using external config (GitHub Pages).");
-                } else if (initialAuthToken) {
-                    // Canvas 環境：使用自定義 token
-                    await signInWithCustomToken(auth, initialAuthToken);
-                    console.log("Signed in with custom token (Canvas).");
-                } else {
-                    // Canvas 環境：Fallback 匿名登入
-                    await signInAnonymously(auth);
-                    console.log("Signed in anonymously (Canvas fallback).");
-                }
-
-
-                // Wait for auth state change to get the final userId
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        isAuthReady = true;
-                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                        console.log("Firebase Auth Ready. User ID:", userId);
-                        checkAndInitializeInventory();
-                        startListeners();
-                    } else {
-                        console.log("No user signed in after attempt.");
-                    }
-                });
-
-            } catch (error) {
-                console.error("Firebase Initialization Error (Check API Key/Rules):", error);
-                // Fallback: Use a random UUID if auth fails completely
-                userId = crypto.randomUUID(); 
-                isAuthReady = true;
-                document.getElementById('userIdDisplay').textContent = `User ID: (Auth Error) ${userId}`;
-                startListeners();
-            }
-        }
-
-        // --- DATA INITIALIZATION ---
-
-        const INITIAL_VEHICLES = [
-            { plate: 'なにわ334わ8888', model: '40系', internalId: '9160 0000 1326 6009', seats: 8, notes: '', status: '在庫' },
-            { plate: '和泉330わ3333', model: '7座 中文導航', internalId: '9160 0000 1326 6207', seats: 7, notes: '中文導航', status: '在庫' },
-            { plate: '成田331わ7777', model: '總統座', internalId: '9160 0000 1326 8609', seats: 7, notes: '總統座', status: '在庫' },
-            { plate: '成田331わ88', model: '4WD 8座', internalId: '9160 0000 1410 6501', seats: 8, notes: '雪胎ing', status: '在庫' },
-            { plate: '成田330わ6666', model: '8座', internalId: '9160 0000 1410 6709', seats: 8, notes: '雪胎ing', status: '在庫' },
+        // --- 預設資料 ---
+        const INITIAL_VEHICLES_SEED = [
+            { location: '成田', plate: '成田330わ888', brand: 'Toyota', model: 'Vellfire', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4861 3901 001', tire: '冬済' },
+            { location: '成田', plate: '和泉330わ2222', brand: 'Toyota', model: 'Alphard', feature: 'Standard', seats: 8, etc: '8001 6161 4860 7900 000', tire: '冬済' },
+            { location: '成田', plate: 'なにわ334わ8888', brand: 'Toyota', model: 'Alphard', feature: '40系 Captain', seats: 7, etc: '7804 2150 2134 9280', tire: '冬済' },
+            { location: '成田', plate: '和泉333わ1111', brand: 'Toyota', model: 'Vellfire', feature: 'Standard', seats: 7, etc: '8001 6161 4861 9900 000', tire: '冬済' },
+            { location: '成田', plate: 'なにわ335わ8888', brand: 'Toyota', model: 'Alphard', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4860 6901 000', tire: '冬済' },
+            { location: '成田', plate: '品川302わ2282', brand: 'Toyota', model: 'Alphard', feature: 'Standard', seats: 7, etc: '8026 8702 5853 4820 000', tire: '冬済' },
+            { location: '成田', plate: '品川302わ6466', brand: 'Toyota', model: 'Alphard', feature: 'HEV', seats: 7, etc: '7070 3000 2295 9138', tire: '夏済' },
+            { location: '成田', plate: '柏300わ2258', brand: 'Toyota', model: 'Alphard', feature: 'Standard', seats: 7, etc: '8001 6161 4861 4901 000', tire: '冬済' },
         ];
 
-        async function checkAndInitializeInventory() {
-            if (!db || !userId) return;
-            const collectionPath = getCollectionPath(VEHICLES_COLLECTION);
-            if (!collectionPath) return;
+        // --- React Component ---
+        function VehicleOrderSystem() {
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [vehicles, setVehicles] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            
+            const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+            const [editingOrder, setEditingOrder] = useState(null);
+            const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+            const [editingVehicle, setEditingVehicle] = useState(null);
+            
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
 
-            try {
-                const snapshot = await getDocs(collection(db, collectionPath));
-                if (snapshot.empty) {
-                    console.log("Inventory empty. Initializing with default vehicles...");
-                    const batch = writeBatch(db);
-                    INITIAL_VEHICLES.forEach((v) => {
-                        const vehicleRef = doc(db, collectionPath, v.plate);
-                        batch.set(vehicleRef, v);
-                    });
-                    await batch.commit();
-                    console.log("Initial inventory created.");
-                } else {
-                    console.log("Inventory already exists.");
-                }
-            } catch (error) {
-                console.error("Error checking/initializing inventory:", error);
-            }
-        }
-
-        // --- REAL-TIME LISTENERS ---
-
-        function startListeners() {
-            if (!isAuthReady || !userId) return;
-
-            const vehiclesCollectionPath = getCollectionPath(VEHICLES_COLLECTION);
-            const ordersCollectionPath = getCollectionPath(ORDERS_COLLECTION);
-
-            if (db && vehiclesCollectionPath) {
-                onSnapshot(collection(db, vehiclesCollectionPath), (snapshot) => {
-                    vehicles = snapshot.docs.map(doc => doc.data());
-                    console.log("Vehicles updated:", vehicles.length);
-                    renderVehicleInventory();
-                    updateVehicleStatusInOrders(); // Re-check status when vehicles change
-                }, (error) => console.error("Error listening to vehicles:", error));
-            }
-
-            if (db && ordersCollectionPath) {
-                onSnapshot(collection(db, ordersCollectionPath), (snapshot) => {
-                    orders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                    console.log("Orders updated:", orders.length);
-                    updateVehicleStatusInOrders();
-                    renderOrderList();
-                    renderCalendar();
-                }, (error) => console.error("Error listening to orders:", error));
-            }
-        }
-
-        // --- RENDER LOGIC: VEHICLES ---
-
-        function renderVehicleInventory() {
-            const container = document.getElementById('vehicleInventory');
-            container.innerHTML = '';
-
-            if (vehicles.length === 0) {
-                 container.innerHTML = '<p class="text-center text-gray-500 col-span-full">目前庫存中無車輛。請點擊「+ 新增庫存車輛」添加。</p>';
-                 return;
-            }
-
-            vehicles.forEach(v => {
-                const card = document.createElement('div');
-                card.className = `p-4 bg-white rounded-xl shadow-md flex flex-col justify-between transition border-2 ${v.status === '出租中' ? 'border-red-400' : 'border-green-400'}`;
-                
-                let statusBadgeClass = v.status === '出租中' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
-
-                card.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-start mb-2">
-                            <h3 class="text-xl font-extrabold text-gray-800">${v.plate}</h3>
-                            <span class="px-3 py-1 text-xs font-medium ${statusBadgeClass} rounded-full">${v.status}</span>
-                        </div>
-                        <p class="text-sm text-gray-600 mb-2">
-                            <span class="font-semibold">${v.model}</span> | ${v.seats}座
-                        </p>
-                        <p class="text-xs text-gray-500 mb-3 truncate">ID: ${v.internalId}</p>
-                        <p class="text-sm text-gray-700 italic border-t pt-2 mt-2">
-                            備註: ${v.notes || '無'}
-                        </p>
-                    </div>
-                    <div class="flex space-x-2 mt-4">
-                        <button onclick="openVehicleModal('${v.plate}')" class="flex-1 px-3 py-1 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
-                            編輯
-                        </button>
-                        <button onclick="deleteVehicle('${v.plate}')" class="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
-                            刪除
-                        </button>
-                    </div>
-                `;
-                container.appendChild(card);
+            const [orderFormData, setOrderFormData] = useState({
+                customer: '', start: '', end: '', vehicleId: '', note: '', status: 'confirmed'
             });
-        }
-
-        // --- RENDER LOGIC: ORDERS (CARD VIEW) ---
-
-        function renderOrderList() {
-            const container = document.getElementById('orderList');
-            if (!container) return; // Guard for calendar view
-            container.innerHTML = '';
-            
-            const now = new Date();
-
-            // Sort orders by pickup time (descending: newest first)
-            const sortedOrders = [...orders].sort((a, b) => new Date(b.pickupTime) - new Date(a.pickupTime));
-
-            if (sortedOrders.length === 0) {
-                 container.innerHTML = '<p class="text-center text-gray-500">目前無租賃訂單。</p>';
-                 return;
-            }
-
-            sortedOrders.forEach((order) => {
-                const pickupDate = new Date(order.pickupTime);
-                const returnDate = new Date(order.returnTime);
-                const isUpcoming = pickupDate > now && (pickupDate.getTime() - now.getTime()) < (3 * 24 * 60 * 60 * 1000); // Within 3 days
-                const isActive = pickupDate <= now && returnDate >= now;
-
-                let cardClass = 'border-gray-300';
-                if (isActive) cardClass = 'is-active border-red-500'; // Red border for active
-                else if (isUpcoming) cardClass = 'is-upcoming border-blue-500'; // Blue border for upcoming
-                
-                const car = vehicles.find(v => v.plate === order.licensePlate) || { model: '未知車型' };
-                // const licensePlateDisplay = order.licensePlate.substring(order.licensePlate.length - 4); // Original logic for badge
-                
-                // Format dates for display
-                const pickupDateStr = pickupDate.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-                const pickupTimeStr = pickupDate.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-                const returnDateStr = returnDate.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-                const returnTimeStr = returnDate.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-
-                const card = document.createElement('div');
-                card.className = `order-card ${cardClass} bg-white p-5 rounded-xl shadow-lg mb-4`;
-                card.setAttribute('data-order-id', order.id);
-                card.onclick = () => showOrderDetails(order.id);
-
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-3 pb-2 border-b border-gray-100">
-                        <div class="flex flex-col">
-                            <span class="text-xs font-semibold text-indigo-600 uppercase tracking-wider">
-                                訂單 #${order.id.substring(0, 8)}
-                            </span>
-                            <h2 class="text-lg font-bold text-gray-700 mt-1 car-model">
-                                ${order.licensePlate}
-                            </h2>
-                        </div>
-                        <div class="text-right">
-                            <span class="license-plate text-sm font-extrabold text-gray-900 bg-yellow-300 px-3 py-1 rounded-md shadow-sm">
-                                ${car.model}
-                            </span>
-                            <span class="status-badge inline-flex items-center mt-2 px-3 py-1 text-xs font-medium leading-4 ${isActive ? 'bg-red-100 text-red-800' : isUpcoming ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'} rounded-full">
-                                ${isActive ? '出租中' : isUpcoming ? '即將開始' : '已確認'}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="pickup-details bg-blue-50 p-3 rounded-lg border border-blue-200">
-                            <span class="text-sm font-semibold text-blue-700">交車 (Pickup)</span>
-                            <div class="time-detail text-xl font-extrabold text-blue-900 leading-tight">
-                                ${pickupDateStr} <span class="text-2xl">${pickupTimeStr}</span>
-                            </div>
-                            <div class="location-detail text-sm font-medium text-gray-600 mt-1 truncate">
-                                地點: ${order.pickupLocation}
-                            </div>
-                        </div>
-
-                        <div class="return-details bg-red-50 p-3 rounded-lg border border-red-200">
-                            <span class="text-sm font-semibold text-red-700">還車 (Return)</span>
-                            <div class="time-detail text-xl font-extrabold text-red-900 leading-tight">
-                                ${returnDateStr} <span class="text-2xl">${returnTimeStr}</span>
-                            </div>
-                            <div class="location-detail text-sm font-medium text-gray-600 mt-1 truncate">
-                                地點: ${order.returnLocation}
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
+            const [vehicleFormData, setVehicleFormData] = useState({
+                location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済'
             });
-        }
-        
-        // --- ORDER DETAIL/CRUD OPERATIONS ---
+            const [newEtcNumber, setNewEtcNumber] = useState('');
 
-        let currentEditingOrderId = null; // Used for Edit/Delete actions
-
-        function showOrderDetails(orderId) {
-            const order = orders.find(o => o.id === orderId);
-            if (!order) return;
-            currentEditingOrderId = orderId;
-            const car = vehicles.find(v => v.plate === order.licensePlate) || { model: '未知車型' };
-
-            const modal = document.getElementById('orderDetailsModal');
-            const modalContent = document.getElementById('modalContent');
-            
-            // Generate detailed content for the modal
-            modalContent.innerHTML = `
-                <p><strong>客戶:</strong> ${order.customerName}</p>
-                <p><strong>車型:</strong> ${car.model}</p>
-                <p><strong>車牌號碼:</strong> <span class="font-extrabold text-lg text-yellow-700">${order.licensePlate}</span></p>
-                <div class="pt-2 border-t mt-2">
-                    <p class="font-semibold text-blue-700">交車資訊 (Pickup)</p>
-                    <p><strong>時間:</strong> ${new Date(order.pickupTime).toLocaleString('zh-TW')}</p>
-                    <p><strong>地點:</strong> ${order.pickupLocation}</p>
-                </div>
-                <div class="pt-2 border-t mt-2">
-                    <p class="font-semibold text-red-700">還車資訊 (Return)</p>
-                    <p><strong>時間:</strong> ${new Date(order.returnTime).toLocaleString('zh-TW')}</p>
-                    <p><strong>地點:</strong> ${order.returnLocation}</p>
-                </div>
-                <div class="pt-4 mt-4 border-t border-dashed">
-                    <p class="font-bold text-gray-800 mb-2">備註/AI解析細節:</p>
-                    <pre class="text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded">${order.notes}</pre>
-                </div>
-            `;
-            
-            document.getElementById('editOrderDetailBtn').onclick = () => openOrderModal(order);
-            document.getElementById('deleteOrderDetailBtn').onclick = () => deleteOrder(orderId);
-            
-            modal.classList.remove('hidden');
-        }
-
-        // --- ORDER MODAL (ADD/EDIT) LOGIC ---
-
-        function closeModals() {
-            document.getElementById('orderModal').classList.add('hidden');
-            document.getElementById('orderDetailsModal').classList.add('hidden');
-            document.getElementById('vehicleModal').classList.add('hidden');
-        }
-
-        function openOrderModal(order = null) {
-            closeModals();
-            const modal = document.getElementById('orderModal');
-            const form = document.getElementById('orderForm');
-            form.reset();
-            currentEditingOrderId = null;
-            document.getElementById('plateConflictMessage').classList.add('hidden');
-            
-            document.getElementById('orderModalTitle').textContent = order ? '編輯租賃訂單' : '新增租賃訂單';
-            document.getElementById('orderFormSubmit').textContent = order ? '更新訂單' : '建立訂單';
-            
-            // Populate license plate dropdown
-            const plateSelect = document.getElementById('licensePlate');
-            plateSelect.innerHTML = vehicles.map(v => 
-                `<option value="${v.plate}" ${order && order.licensePlate === v.plate ? 'selected' : ''}>${v.plate} (${v.model})</option>`
-            ).join('');
-
-            if (order) {
-                currentEditingOrderId = order.id;
-                document.getElementById('customerName').value = order.customerName || '';
-                document.getElementById('pickupTime').value = formatToLocalISO(order.pickupTime);
-                document.getElementById('returnTime').value = formatToLocalISO(order.returnTime);
-                document.getElementById('pickupLocation').value = order.pickupLocation || '';
-                document.getElementById('returnLocation').value = order.returnLocation || '';
-                document.getElementById('notes').value = order.notes || '';
-            }
-
-            modal.classList.remove('hidden');
-        }
-
-        function formatToLocalISO(dateString) {
-            if (!dateString) return '';
-            const d = new Date(dateString);
-            const offset = d.getTimezoneOffset() * 60000;
-            const localISOTime = new Date(d.getTime() - offset).toISOString().slice(0, 16);
-            return localISOTime;
-        }
-
-        document.getElementById('orderForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-
-            const newOrder = {
-                customerName: data.customerName,
-                licensePlate: data.licensePlate,
-                pickupTime: new Date(data.pickupTime).toISOString(),
-                returnTime: new Date(data.returnTime).toISOString(),
-                pickupLocation: data.pickupLocation,
-                returnLocation: data.returnLocation,
-                notes: data.notes,
-            };
-
-            if (!await checkConflict(newOrder, currentEditingOrderId)) {
-                showMessage('❌ 調度衝突！該車輛在選定時間已被預訂。', 'bg-red-500');
-                return;
-            }
-
-            const collectionPath = getCollectionPath(ORDERS_COLLECTION);
-            if (!collectionPath) return;
-
-            try {
-                if (currentEditingOrderId) {
-                    // Update existing order
-                    const docRef = doc(db, collectionPath, currentEditingOrderId);
-                    await setDoc(docRef, newOrder);
-                    showMessage('✅ 訂單已成功更新！', 'bg-green-500');
-                } else {
-                    // Add new order
-                    const docRef = doc(collection(db, collectionPath));
-                    await setDoc(docRef, newOrder);
-                    showMessage('✅ 訂單已成功建立！', 'bg-green-500');
-                }
-                closeModals();
-            } catch (error) {
-                console.error("Error saving order:", error);
-                showMessage('❌ 儲存訂單失敗。', 'bg-red-500');
-            }
-        });
-
-        async function deleteOrder(orderId) {
-            // Replaced window.confirm with a simpler message for Canvas compatibility
-            const confirmed = true; // Assume confirmation if using a custom modal
-
-            const collectionPath = getCollectionPath(ORDERS_COLLECTION);
-            if (!collectionPath) return;
-
-            try {
-                await deleteDoc(doc(db, collectionPath, orderId));
-                showMessage('✅ 訂單已成功刪除！', 'bg-green-500');
-                closeModals();
-            } catch (error) {
-                console.error("Error deleting order:", error);
-                showMessage('❌ 刪除訂單失敗。', 'bg-red-500');
-            }
-        }
-
-        // --- CONFLICT CHECK LOGIC ---
-
-        async function checkConflict(newOrder, excludeId = null) {
-            const newStart = new Date(newOrder.pickupTime).getTime();
-            const newEnd = new Date(newOrder.returnTime).getTime();
-            const plate = newOrder.licensePlate;
-
-            if (newStart >= newEnd) {
-                // Invalid time range
-                return false;
-            }
-
-            const conflictingOrder = orders.find(order => {
-                if (order.id === excludeId) return false; // Ignore itself during edit
-                if (order.licensePlate !== plate) return false; // Different car
-
-                const existingStart = new Date(order.pickupTime).getTime();
-                const existingEnd = new Date(order.returnTime).getTime();
-                
-                // Check for overlap
-                return (newStart < existingEnd && newEnd > existingStart);
-            });
-
-            const conflictMessage = document.getElementById('plateConflictMessage');
-            if (conflictingOrder) {
-                conflictMessage.classList.remove('hidden');
-                document.getElementById('orderFormSubmit').disabled = true;
-                return false;
-            } else {
-                conflictMessage.classList.add('hidden');
-                document.getElementById('orderFormSubmit').disabled = false;
-                return true;
-            }
-        }
-        
-        // Event listener for conflict checking on time/plate change
-        document.querySelectorAll('#pickupTime, #returnTime, #licensePlate').forEach(input => {
-            input.addEventListener('change', () => {
-                const form = document.getElementById('orderForm');
-                const formData = new FormData(form);
-                const data = Object.fromEntries(formData.entries());
-                
-                const tempOrder = {
-                    licensePlate: data.licensePlate,
-                    pickupTime: data.pickupTime,
-                    returnTime: data.returnTime
-                };
-                // Only check conflict if both times are set
-                if (tempOrder.pickupTime && tempOrder.returnTime && tempOrder.licensePlate) {
-                    checkConflict(tempOrder, currentEditingOrderId);
-                }
-            });
-        });
-
-        // --- VEHICLE CRUD OPERATIONS ---
-
-        let currentEditingVehiclePlate = null;
-
-        function openVehicleModal(plate = null) {
-            closeModals();
-            const modal = document.getElementById('vehicleModal');
-            const form = document.getElementById('vehicleForm');
-            form.reset();
-            currentEditingVehiclePlate = null;
-
-            document.getElementById('vehicleModalTitle').textContent = plate ? '編輯庫存車輛' : '新增庫存車輛';
-            document.getElementById('vehicleFormSubmit').textContent = plate ? '更新車輛' : '新增車輛';
-            document.getElementById('vehiclePlate').readOnly = !!plate;
-
-            if (plate) {
-                const vehicle = vehicles.find(v => v.plate === plate);
-                if (!vehicle) return;
-                currentEditingVehiclePlate = plate;
-                document.getElementById('vehiclePlate').value = vehicle.plate;
-                document.getElementById('vehicleModel').value = vehicle.model;
-                document.getElementById('vehicleInternalId').value = vehicle.internalId;
-                document.getElementById('vehicleSeats').value = vehicle.seats;
-                document.getElementById('vehicleNotes').value = vehicle.notes;
-            }
-
-            modal.classList.remove('hidden');
-        }
-
-        document.getElementById('vehicleForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const plate = formData.get('plate');
-            const isNew = !currentEditingVehiclePlate;
-
-            // Simple validation for new vehicle
-            if (isNew && vehicles.find(v => v.plate === plate)) {
-                showMessage('❌ 車牌號碼已存在。', 'bg-red-500');
-                return;
-            }
-            
-            const newVehicle = {
-                plate: plate,
-                model: formData.get('model'),
-                internalId: formData.get('internalId'),
-                seats: parseInt(formData.get('seats')),
-                notes: formData.get('notes'),
-                status: '在庫', // Default status for new/edited vehicle
-            };
-
-            const collectionPath = getCollectionPath(VEHICLES_COLLECTION);
-            if (!collectionPath) return;
-
-            try {
-                const docRef = doc(db, collectionPath, plate);
-                await setDoc(docRef, newVehicle);
-                showMessage(isNew ? '✅ 車輛已成功新增！' : '✅ 車輛資訊已更新！', 'bg-green-500');
-                closeModals();
-            } catch (error) {
-                console.error("Error saving vehicle:", error);
-                showMessage('❌ 儲存車輛失敗。', 'bg-red-500');
-            }
-        });
-
-        async function deleteVehicle(plate) {
-            // Replaced window.confirm with a simpler message for Canvas compatibility
-            const confirmed = true; // Assume confirmation if using a custom modal
-
-            const collectionPath = getCollectionPath(VEHICLES_COLLECTION);
-            if (!collectionPath) return;
-
-            try {
-                await deleteDoc(doc(db, collectionPath, plate));
-                showMessage('✅ 車輛已成功刪除！', 'bg-green-500');
-            } catch (error) {
-                console.error("Error deleting vehicle:", error);
-                showMessage('❌ 刪除車輛失敗。', 'bg-red-500');
-            }
-        }
-        
-        function updateVehicleStatusInOrders() {
-            // This function is called when orders or vehicles change
-            if (!vehicles.length) return;
-
-            const now = new Date().getTime();
-            const updates = new Map();
-
-            vehicles.forEach(v => {
-                const hasActiveOrder = orders.some(o => 
-                    o.licensePlate === v.plate && 
-                    new Date(o.pickupTime).getTime() <= now && 
-                    new Date(o.returnTime).getTime() >= now
-                );
-
-                const newStatus = hasActiveOrder ? '出租中' : '在庫';
-
-                if (v.status !== newStatus) {
-                    // Prepare batch update if needed (Firestore will handle the actual update via listener)
-                    updates.set(v.plate, { status: newStatus });
-                    // Optimistically update the local object for immediate UI refresh
-                    v.status = newStatus;
-                }
-            });
-            
-            // For simplicity in this single-file app, we rely on the onSnapshot listener to trigger the UI update (renderVehicleInventory).
-            // If we needed to bulk update Firestore status, we'd use a writeBatch here.
-            // For now, we rely on the orders/vehicles listeners to keep everything fresh.
-            renderVehicleInventory(); // Force re-render inventory after status check
-        }
-        
-        // --- CALENDAR VIEW LOGIC ---
-        
-        let currentCalendarDate = new Date(); // Start with current month
-
-        function toggleView(view) {
-            document.getElementById('orderListView').classList.add('hidden');
-            document.getElementById('calendarView').classList.add('hidden');
-            
-            document.getElementById('listViewBtn').classList.remove('bg-indigo-600', 'text-white');
-            document.getElementById('calendarViewBtn').classList.remove('bg-indigo-600', 'text-white');
-            
-            if (view === 'list') {
-                document.getElementById('orderListView').classList.remove('hidden');
-                document.getElementById('listViewBtn').classList.add('bg-indigo-600', 'text-white');
-                renderOrderList();
-            } else if (view === 'calendar') {
-                document.getElementById('calendarView').classList.remove('hidden');
-                document.getElementById('calendarViewBtn').classList.add('bg-indigo-600', 'text-white');
-                renderCalendar();
-            }
-        }
-        
-        function changeMonth(delta) {
-            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
-            renderCalendar();
-        }
-
-        function renderCalendar() {
-            const container = document.getElementById('calendarGrid');
-            const header = document.getElementById('calendarHeader');
-            container.innerHTML = '';
-
-            const year = currentCalendarDate.getFullYear();
-            const month = currentCalendarDate.getMonth();
-            
-            header.textContent = `${year}年 ${month + 1}月`;
-
-            // Start date of the month
-            const firstDayOfMonth = new Date(year, month, 1);
-            // Day of the week (0=Sun, 6=Sat)
-            const startingDay = firstDayOfMonth.getDay(); 
-
-            // Calculate number of days in the month
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            
-            // Calculate total days to display (42 max for 6 weeks)
-            let totalDays = startingDay + daysInMonth;
-            if (totalDays > 35) totalDays = 42; else if (totalDays > 28) totalDays = 35; else totalDays = 28;
-
-            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-            
-            // Render Weekday Headers
-            weekdays.forEach(day => {
-                container.innerHTML += `<div class="p-2 text-center font-bold text-gray-700">${day}</div>`;
-            });
-
-            // Fill leading empty days
-            for (let i = 0; i < startingDay; i++) {
-                container.innerHTML += `<div class="calendar-day bg-gray-100 p-2 border border-gray-200"></div>`;
-            }
-
-            // Render days
-            for (let day = 1; day <= daysInMonth; day++) {
-                const date = new Date(year, month, day);
-                const dateISO = date.toISOString().split('T')[0];
-                
-                // Check for orders on this day
-                const ordersOnDay = orders.filter(order => {
-                    const pickup = new Date(order.pickupTime);
-                    const ret = new Date(order.returnTime);
-                    // Check if the date is between pickup and return (inclusive)
-                    return date >= new Date(pickup.getFullYear(), pickup.getMonth(), pickup.getDate()) && 
-                           date <= new Date(ret.getFullYear(), ret.getMonth(), ret.getDate());
-                });
-
-                const isToday = dateISO === new Date().toISOString().split('T')[0];
-                const orderCount = ordersOnDay.length;
-                const cardClass = orderCount > 0 ? 'has-order border-green-400' : 'bg-white';
-                const todayClass = isToday ? 'ring-2 ring-indigo-500' : '';
-
-                container.innerHTML += `
-                    <div class="calendar-day ${cardClass} p-2 border border-gray-200 rounded ${todayClass}" data-date="${dateISO}" ${orderCount > 0 ? `onclick="showDayOrders('${dateISO}')"` : ''}>
-                        <span class="calendar-day-header ${isToday ? 'text-indigo-600 font-extrabold' : ''}">${day}</span>
-                        ${orderCount > 0 ? `<span class="calendar-order-count">${orderCount}</span>` : ''}
-                    </div>
-                `;
-            }
-            
-            // Fill trailing empty days
-            const remainingDays = totalDays - (startingDay + daysInMonth);
-            for (let i = 0; i < remainingDays; i++) {
-                 container.innerHTML += `<div class="calendar-day bg-gray-100 p-2 border border-gray-200"></div>`;
-            }
-        }
-        
-        function showDayOrders(dateISO) {
-            const date = new Date(dateISO);
-            const dateStr = date.toLocaleDateString('zh-TW');
-
-            const dayOrders = orders.filter(order => {
-                const pickup = new Date(order.pickupTime);
-                const ret = new Date(order.returnTime);
-                // Check if the date is between pickup and return (inclusive)
-                return date >= new Date(pickup.getFullYear(), pickup.getMonth(), pickup.getDate()) && 
-                       date <= new Date(ret.getFullYear(), ret.getMonth(), ret.getDate());
-            });
-            
-            const listHtml = dayOrders.map(order => {
-                const car = vehicles.find(v => v.plate === order.licensePlate) || { model: '未知車型' };
-                return `
-                    <div class="p-3 border-b border-gray-200">
-                        <p class="font-bold text-gray-800">${car.model} (${order.licensePlate})</p>
-                        <p class="text-sm text-gray-600">客戶: ${order.customerName}</p>
-                        <p class="text-xs text-blue-600">取車: ${new Date(order.pickupTime).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} @ ${order.pickupLocation}</p>
-                        <p class="text-xs text-red-600">還車: ${new Date(order.returnTime).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} @ ${order.returnLocation}</p>
-                        <button onclick="showOrderDetails('${order.id}')" class="text-xs text-indigo-500 hover:text-indigo-700 mt-1">查看詳情</button>
-                    </div>
-                `;
-            }).join('');
-
-            // Reuse the main order details modal for simplicity as a temporary pop-up
-            const modal = document.getElementById('orderDetailsModal');
-            const modalContent = document.getElementById('modalContent');
-            
-            modalContent.innerHTML = `
-                <h4 class="text-lg font-bold mb-3">${dateStr} 的調度清單</h4>
-                ${listHtml.length > 0 ? listHtml : '<p class="text-gray-500">本日無調度或訂單。</p>'}
-            `;
-            
-            // Hide the default action buttons
-            document.getElementById('modalActionButtons').classList.add('hidden');
-            document.querySelector('#orderDetailsModal .border-t').classList.add('hidden');
-            
-            document.querySelector('#orderDetailsModal h3').textContent = '日曆調度概覽';
-            modal.classList.remove('hidden');
-        }
-        
-        // Custom close for DayOrders modal to restore buttons
-        function closeDetailsModal() {
-             document.getElementById('orderDetailsModal').classList.add('hidden');
-             
-             // Restore action buttons area for list view if necessary
-             document.getElementById('modalActionButtons').classList.remove('hidden');
-             document.querySelector('#orderDetailsModal .border-t').classList.remove('hidden');
-        }
-
-        // --- AI IMAGE PARSING LOGIC ---
-
-        function setupImageParsing() {
-            document.getElementById('parseImageBtn').addEventListener('click', parseOrderImage);
-            document.getElementById('imageFile').addEventListener('change', (e) => {
-                 const fileName = e.target.files[0] ? e.target.files[0].name : '選擇訂單圖片';
-                 document.getElementById('imageFileName').textContent = fileName;
-                 document.getElementById('parseImageBtn').disabled = !e.target.files[0];
-            });
-        }
-        
-        async function parseOrderImage() {
-            const fileInput = document.getElementById('imageFile');
-            const file = fileInput.files[0];
-            if (!file) return;
-
-            const parseBtn = document.getElementById('parseImageBtn');
-            const originalText = parseBtn.textContent;
-            parseBtn.innerHTML = '<span class="spinner"></span> 解析中...';
-            parseBtn.disabled = true;
-            
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                const base64Data = reader.result.split(',')[1];
-                
-                // Prompt the model to extract and structure data
-                const userPrompt = `
-                    請從這張租賃訂單圖片中擷取所有相關資訊。將以下欄位標準化為指定格式，並將所有其他額外資訊（如費用、保險、電話、航班號、詳細地址、兒童座椅需求）彙整到備註欄位。
-
-                    **標準化輸出欄位及格式:**
-                    1. **Customer Name:** [客戶姓名]
-                    2. **Pickup Date/Time:** [YYYY-MM-DD HH:MM] (使用 24 小時制，盡可能精準)
-                    3. **Return Date/Time:** [YYYY-MM-DD HH:MM] (使用 24 小時制，盡可能精準)
-                    4. **Pickup Location:** [地點名稱或地址]
-                    5. **Return Location:** [地點名稱或地址]
-                    6. **Vehicle Suggestion:** [車輛/車型描述，例如: Alphard 8人座 雪胎 4WD 或 7座 中文導航]
-                    7. **Notes:** [所有其他未填入以上欄位的詳細資訊，請保持原文字並分行]
-                    
-                    **請以清晰的 JSON 格式輸出結果，不要包含任何解釋性文字。**
-                `;
-
-                const payload = {
-                    contents: [{
-                        role: "user",
-                        parts: [
-                            { text: userPrompt },
-                            { inlineData: { mimeType: file.type, data: base64Data } }
-                        ]
-                    }],
-                    systemInstruction: {
-                        parts: [{ text: "You are a data extraction and parsing AI specializing in converting rental order images into structured JSON data based on provided instructions." }]
-                    },
-                    generationConfig: {
-                         responseMimeType: "application/json",
-                         responseSchema: {
-                            type: "OBJECT",
-                            properties: {
-                                "customerName": { "type": "STRING", "description": "客戶姓名" },
-                                "pickupTime": { "type": "STRING", "description": "交車時間，格式 YYYY-MM-DD HH:MM" },
-                                "returnTime": { "type": "STRING", "description": "還車時間，格式 YYYY-MM-DD HH:MM" },
-                                "pickupLocation": { "type": "STRING", "description": "取車地點" },
-                                "returnLocation": { "type": "STRING", "description": "還車地點" },
-                                "vehicleSuggestion": { "type": "STRING", "description": "AI 識別出的車輛類型建議" },
-                                "notes": { "type": "STRING", "description": "所有額外資訊，分行顯示" }
-                            }
-                        }
+            // Auth & Sync
+            useEffect(() => {
+                signInAnonymously(auth).catch(console.error);
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                    setUser(currentUser);
+                    if (currentUser) {
+                        const unsubVehicles = onSnapshot(collection(db, 'vehicles'), (snap) => {
+                            setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                            setIsLoading(false);
+                        });
+                        const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+                            setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        });
+                        return () => { unsubVehicles(); unsubOrders(); };
+                    } else {
+                        setIsLoading(false);
                     }
-                };
+                });
+                return () => unsubscribe();
+            }, []);
 
-                const apiKey = "AIzaSyChGJ5KHhc6_FuC10ZgR93OzesJogXvfHY"; // <-- 請將您的真實 AI Key 貼在這裡
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-                let response;
-                try {
-                    response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const result = await response.json();
-                    const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    const parsedData = JSON.parse(jsonText);
-                    
-                    fillFormFromAI(parsedData);
-                    showMessage('✅ 圖片解析成功！請檢查並確認資料。', 'bg-green-500');
-
-                } catch (error) {
-                    console.error("AI Parsing Error:", error);
-                    showMessage('❌ 圖片解析失敗，請手動輸入。', 'bg-red-500');
-                } finally {
-                    parseBtn.textContent = originalText;
-                    parseBtn.disabled = false;
-                }
+            // Helpers
+            const formatDateTime = (iso) => {
+                if (!iso) return '';
+                const d = new Date(iso);
+                return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
             };
-        }
-        
-        function fillFormFromAI(data) {
-            document.getElementById('customerName').value = data.customerName || '';
-            
-            // Convert AI's YYYY-MM-DD HH:MM format to local ISO format for datetime-local input
-            if (data.pickupTime) {
-                // Since the AI output is localized for the user's prompt (Taiwan/Japan), 
-                // we assume it is the local time without specific timezone info.
-                const dt = new Date(data.pickupTime.replace(' ', 'T'));
-                if (!isNaN(dt)) {
-                    document.getElementById('pickupTime').value = formatToLocalISO(dt);
-                }
-            }
-            if (data.returnTime) {
-                const dt = new Date(data.returnTime.replace(' ', 'T'));
-                 if (!isNaN(dt)) {
-                    document.getElementById('returnTime').value = formatToLocalISO(dt);
-                }
-            }
-            
-            document.getElementById('pickupLocation').value = data.pickupLocation || '';
-            document.getElementById('returnLocation').value = data.returnLocation || '';
-            document.getElementById('notes').value = (data.notes || '') + (data.vehicleSuggestion ? `\n--- AI 建議車型: ${data.vehicleSuggestion} ---` : '');
-            
-            // Display vehicle suggestion below the license plate dropdown
-            const suggestion = data.vehicleSuggestion ? `AI 建議: ${data.vehicleSuggestion}` : '';
-            document.getElementById('vehicleSuggestionDisplay').textContent = suggestion;
 
-            // Trigger conflict check after filling times
-            document.getElementById('pickupTime').dispatchEvent(new Event('change'));
-        }
+            const getVehicleOrderForDate = (vid, dateStr) => {
+                const startOfDay = new Date(`${dateStr}T00:00:00`);
+                const endOfDay = new Date(`${dateStr}T23:59:59`);
+                return orders.find(o => o.vehicleId === vid && o.status !== 'cancelled' && new Date(o.start) < endOfDay && new Date(o.end) > startOfDay);
+            };
 
-        // --- MESSAGE/TOAST UTILITY ---
+            const isVehicleAvailable = (vid, start, end, excludeId) => {
+                const s = new Date(start);
+                const e = new Date(end);
+                return !orders.some(o => o.vehicleId === vid && o.id !== excludeId && o.status !== 'cancelled' && s < new Date(o.end) && e > new Date(o.start));
+            };
 
-        function showMessage(message, className) {
-            const toast = document.getElementById('toastNotification');
-            toast.textContent = message;
-            toast.className = `fixed bottom-5 right-5 p-4 rounded-lg text-white shadow-lg ${className} z-50`;
-            toast.classList.remove('hidden');
-            setTimeout(() => {
-                toast.classList.add('hidden');
-            }, 5000);
-        }
+            // Actions
+            const handleSaveOrder = async (e) => {
+                e.preventDefault();
+                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end || !orderFormData.vehicleId) return alert("請填寫必填欄位");
+                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return alert("時間錯誤");
+                if (!isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) return alert("該時段車輛已被預約");
 
-        // --- MODAL CLOSE UTILITIES (NEW) ---
-        function setupModalBackdropClose() {
-            const modals = [
-                { id: 'orderDetailsModal', close: closeDetailsModal },
-                { id: 'orderModal', close: closeModals },
-                { id: 'vehicleModal', close: closeModals }
-            ];
+                try {
+                    const data = { ...orderFormData, updatedAt: serverTimestamp() };
+                    if (editingOrder) await updateDoc(doc(db, 'orders', editingOrder.id), data);
+                    else await addDoc(collection(db, 'orders'), { ...data, createdAt: serverTimestamp() });
+                    setIsOrderModalOpen(false);
+                } catch (err) { alert("儲存失敗: " + err.message); }
+            };
 
-            modals.forEach(({ id, close }) => {
-                const modal = document.getElementById(id);
-                if (modal) {
-                    modal.addEventListener('click', (e) => {
-                        // Check if the click target is the modal backdrop itself (not children)
-                        if (e.target === modal) {
-                            close();
-                        }
-                    });
-                }
-            });
-        }
+            const handleDeleteOrder = async (id) => {
+                if(window.confirm("確定刪除?")) await deleteDoc(doc(db, 'orders', id));
+            };
 
-        // Expose functions used in HTML inline event handlers
-        window.toggleView = toggleView;
-        window.openVehicleModal = openVehicleModal;
-        window.deleteVehicle = deleteVehicle;
-        window.showOrderDetails = showOrderDetails;
-        window.openOrderModal = openOrderModal;
-        window.changeMonth = changeMonth;
-        window.showDayOrders = showDayOrders;
-        window.closeDetailsModal = closeDetailsModal;
-        window.closeModals = closeModals;
-        window.deleteOrder = deleteOrder;
-        
-        // --- INITIALIZATION ---
-        
-        window.onload = initializeFirebase;
-        document.addEventListener('DOMContentLoaded', () => {
-            setupImageParsing();
-            toggleView('list'); // Default to list view on load
-            setupModalBackdropClose(); // Setup modal closing via backdrop click
-            // Set current date on calendar header initially
-            document.getElementById('calendarHeader').textContent = `${currentCalendarDate.getFullYear()}年 ${currentCalendarDate.getMonth() + 1}月`;
-        });
-    </script>
+            const handleSaveVehicle = async (e) => {
+                e.preventDefault();
+                try {
+                    const data = { ...vehicleFormData, updatedAt: serverTimestamp() };
+                    if (editingVehicle) await updateDoc(doc(db, 'vehicles', editingVehicle.id), data);
+                    else await addDoc(collection(db, 'vehicles'), { ...data, createdAt: serverTimestamp() });
+                    setIsVehicleModalOpen(false);
+                } catch (err) { alert("儲存失敗"); }
+            };
 
-    <div class="max-w-7xl mx-auto mb-6">
-        <h1 class="text-3xl font-bold text-gray-900">車輛調度與訂單管理儀表板</h1>
-        <p id="userIdDisplay" class="text-sm text-gray-500 mt-1">User ID: Loading...</p>
-    </div>
+            const handleDeleteVehicle = async (id) => {
+                if(window.confirm("確定刪除?")) await deleteDoc(doc(db, 'vehicles', id));
+            };
 
-    <div class="max-w-7xl mx-auto mb-8 p-6 bg-white rounded-xl shadow-lg">
-        <div class="flex justify-between items-center mb-4 border-b pb-3">
-            <h2 class="text-2xl font-semibold text-gray-800">在庫車輛庫存</h2>
-            <button onclick="openVehicleModal()" class="flex items-center px-4 py-2 text-sm bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition">
-                <i data-lucide="car" class="w-5 h-5 mr-2"></i> + 新增庫存車輛
-            </button>
-        </div>
-        <div id="vehicleInventory" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            <div class="p-4 bg-gray-100 rounded-xl text-center text-gray-500">載入車輛中...</div>
-        </div>
-    </div>
+            const handleSeedData = async () => {
+                if(!window.confirm(`確定匯入 ${INITIAL_VEHICLES_SEED.length} 台車輛?`)) return;
+                try {
+                    const existingPlates = vehicles.map(v => v.plate);
+                    const newVehicles = INITIAL_VEHICLES_SEED.filter(v => !existingPlates.includes(v.plate));
+                    if (newVehicles.length === 0) return alert("預設車輛已存在");
+                    await Promise.all(newVehicles.map(v => addDoc(collection(db, 'vehicles'), { ...v, createdAt: serverTimestamp() })));
+                    alert("匯入完成");
+                } catch (e) { alert("失敗: " + e.message); }
+            };
 
-    <div class="max-w-7xl mx-auto p-6 bg-white rounded-xl shadow-lg">
-        <div class="flex justify-between items-center mb-4 border-b pb-3">
-            <h2 class="text-2xl font-semibold text-gray-800">租賃訂單管理</h2>
-            <div class="flex space-x-3">
-                <button id="listViewBtn" onclick="toggleView('list')" class="flex items-center px-4 py-2 text-sm bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition">
-                     <i data-lucide="list-ordered" class="w-4 h-4 mr-2"></i> 訂單列表
-                </button>
-                <button id="calendarViewBtn" onclick="toggleView('calendar')" class="flex items-center px-4 py-2 text-sm bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition">
-                    <i data-lucide="calendar" class="w-4 h-4 mr-2"></i> 排程日曆
-                </button>
-                <button onclick="openOrderModal()" class="flex items-center px-4 py-2 text-sm bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition">
-                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> + 新增租賃訂單
-                </button>
-            </div>
-        </div>
+            if (isLoading) return <div className="min-h-screen flex items-center justify-center text-slate-500">載入資料中...</div>;
 
-        <div id="orderListView" class="space-y-4">
-            <div id="orderList" class="space-y-4">
-                <p class="text-center text-gray-500">載入訂單中...</p>
-            </div>
-        </div>
+            return (
+                <div className="pb-20 md:pb-0">
+                    <nav className="bg-slate-900 text-white p-4 sticky top-0 z-20 flex justify-between items-center shadow">
+                        <div className="flex items-center gap-2 font-bold"><Car className="text-blue-400"/> 調度系統</div>
+                        <div className="text-xs text-gray-400 flex items-center gap-1">
+                            {user ? <span className="text-green-400">● 線上</span> : <span>連線中...</span>}
+                        </div>
+                    </nav>
 
-        <div id="calendarView" class="hidden">
-            <div class="flex justify-between items-center mb-4">
-                <button onclick="changeMonth(-1)" class="px-3 py-1 text-sm bg-gray-200 rounded-lg hover:bg-gray-300">
-                    <i data-lucide="chevron-left" class="w-4 h-4 inline-block"></i> 上個月
-                </button>
-                <h3 id="calendarHeader" class="text-xl font-bold text-gray-800"></h3>
-                <button onclick="changeMonth(1)" class="px-3 py-1 text-sm bg-gray-200 rounded-lg hover:bg-gray-300">
-                    下個月 <i data-lucide="chevron-right" class="w-4 h-4 inline-block"></i>
-                </button>
-            </div>
-            <div id="calendarGrid" class="grid grid-cols-7 border border-gray-200 rounded-lg overflow-hidden">
-                </div>
-        </div>
-    </div>
+                    <main className="p-4 max-w-5xl mx-auto">
+                        {vehicles.length < 8 && !isLoading && (
+                            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center">
+                                <span className="text-sm text-blue-800">快速開始：匯入預設資料？</span>
+                                <button onClick={handleSeedData} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">匯入</button>
+                            </div>
+                        )}
 
-    <div id="orderDetailsModal" class="modal hidden fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 md:p-8">
-            <div class="flex justify-between items-center pb-4 border-b">
-                <h3 class="text-xl font-bold text-gray-800">訂單詳細資訊</h3>
-                <button onclick="closeDetailsModal()" class="text-gray-400 hover:text-gray-600">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            <div id="modalContent" class="py-4 text-gray-700 space-y-3">
-                </div>
-            <div class="pt-4 border-t mt-4 text-right">
-                <div id="modalActionButtons" class="flex justify-end space-x-3">
-                    <button id="deleteOrderDetailBtn" class="px-4 py-2 text-sm bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition">
-                        刪除訂單
-                    </button>
-                    <button id="editOrderDetailBtn" class="px-4 py-2 text-sm bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition">
-                        編輯訂單
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
+                                    <h2 className="font-bold">看板</h2>
+                                    <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="border rounded p-1" />
+                                </div>
+                                <div className="space-y-3">
+                                    {vehicles.map(v => {
+                                        const order = getVehicleOrderForDate(v.id, filterDate);
+                                        return (
+                                            <div key={v.id} className="bg-white p-4 rounded shadow-sm border-l-4 border-l-blue-500">
+                                                <div className="flex justify-between">
+                                                    <div className="font-bold text-lg">{v.plate}</div>
+                                                    <div className={`text-xs px-2 py-1 rounded ${order?'bg-red-100 text-red-700':'bg-green-100 text-green-700'}`}>{order?'出租中':'空車'}</div>
+                                                </div>
+                                                <div className="text-sm text-gray-500 mb-2">{v.model} ({v.tire})</div>
+                                                {order ? (
+                                                    <div className="text-sm bg-gray-50 p-2 rounded">
+                                                        <div className="font-medium text-blue-700">{order.customer}</div>
+                                                        <div className="text-xs text-gray-500">{formatDateTime(order.start)} - {formatDateTime(order.end)}</div>
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={()=>{
+                                                        setEditingOrder(null);
+                                                        setOrderFormData({customer:'', start:`${filterDate}T10:00`, end:`${filterDate}T18:00`, vehicleId: v.id, note:'', status:'confirmed'});
+                                                        setIsOrderModalOpen(true);
+                                                    }} className="mt-2 w-full py-1 text-sm border border-blue-600 text-blue-600 rounded">派單</button>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
-    <div id="orderModal" class="modal hidden fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 md:p-8">
-            <div class="flex justify-between items-center pb-4 border-b">
-                <h3 id="orderModalTitle" class="text-xl font-bold text-gray-800">新增租賃訂單</h3>
-                <button onclick="closeModals()" class="text-gray-400 hover:text-gray-600">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            <form id="orderForm" class="py-4 space-y-4">
-                
-                <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <h4 class="font-semibold text-yellow-800 mb-2">⚡ AI 訂單圖片解析</h4>
-                    <div class="flex space-x-3 items-end">
-                        <label class="block w-full">
-                            <span class="sr-only">選擇訂單圖片</span>
-                            <input type="file" id="imageFile" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-                        </label>
-                        <button type="button" id="parseImageBtn" disabled class="whitespace-nowrap px-4 py-2 text-sm bg-indigo-500 text-white font-medium rounded-lg hover:bg-indigo-600 transition disabled:opacity-50 flex items-center justify-center">
-                            解析
-                        </button>
+                        {activeTab === 'vehicles' && (
+                            <div className="space-y-4">
+                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済'}); setIsVehicleModalOpen(true)}} className="w-full py-3 bg-blue-600 text-white rounded shadow font-bold flex justify-center gap-2"><Plus/> 新增車輛</button>
+                                {vehicles.map(v => (
+                                    <div key={v.id} className="bg-white p-4 rounded shadow-sm flex justify-between items-center">
+                                        <div>
+                                            <div className="font-bold">{v.plate} <span className="text-xs text-gray-500">({v.location})</span></div>
+                                            <div className="text-sm text-gray-500">{v.model} / {v.tire}</div>
+                                            <div className="text-xs bg-gray-100 inline-block px-1 rounded mt-1">ETC: {v.etc||'無'}</div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setIsVehicleModalOpen(true)}} className="p-2 text-gray-400 hover:text-blue-600"><Edit3 size={18}/></button>
+                                            <button onClick={()=>handleDeleteVehicle(v.id)} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={18}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {activeTab === 'orders' && (
+                            <div className="space-y-4">
+                                <button onClick={()=>{setEditingOrder(null); setOrderFormData({customer:'', start:'', end:'', vehicleId:'', note:'', status:'confirmed'}); setIsOrderModalOpen(true)}} className="w-full py-3 bg-blue-600 text-white rounded shadow font-bold flex justify-center gap-2"><Plus/> 新增訂單</button>
+                                {orders.sort((a,b)=>new Date(b.start)-new Date(a.start)).map(o => {
+                                    const v = vehicles.find(x=>x.id===o.vehicleId);
+                                    return (
+                                        <div key={o.id} className="bg-white p-4 rounded shadow-sm">
+                                            <div className="flex justify-between mb-1">
+                                                <span className="font-bold">{o.customer}</span>
+                                                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">{o.status}</span>
+                                            </div>
+                                            <div className="text-sm text-gray-800 mb-1">{v?.plate || '車輛已刪除'}</div>
+                                            <div className="text-xs text-gray-500 mb-3">{formatDateTime(o.start)} <br/> ↓ <br/> {formatDateTime(o.end)}</div>
+                                            <div className="flex justify-end gap-3 border-t pt-2">
+                                                <button onClick={()=>{setEditingOrder(o); setOrderFormData(o); setIsOrderModalOpen(true)}} className="text-sm text-blue-600">編輯</button>
+                                                <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm text-red-600">刪除</button>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </main>
+
+                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-3 z-20 text-xs">
+                        <button onClick={()=>setActiveTab('dashboard')} className={`flex flex-col items-center ${activeTab==='dashboard'?'text-blue-600':'text-gray-400'}`}><Calendar size={20}/><span>看板</span></button>
+                        <button onClick={()=>setActiveTab('vehicles')} className={`flex flex-col items-center ${activeTab==='vehicles'?'text-blue-600':'text-gray-400'}`}><Car size={20}/><span>車輛</span></button>
+                        <button onClick={()=>setActiveTab('orders')} className={`flex flex-col items-center ${activeTab==='orders'?'text-blue-600':'text-gray-400'}`}><Users size={20}/><span>訂單</span></button>
                     </div>
-                    <p id="imageFileName" class="text-xs text-gray-500 mt-1"></p>
+
+                    {isOrderModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-md rounded-lg p-5 max-h-[90vh] overflow-y-auto">
+                                <h3 className="font-bold text-lg mb-4">{editingOrder?'編輯':'新增'}訂單</h3>
+                                <form onSubmit={handleSaveOrder} className="space-y-3">
+                                    <input placeholder="客戶姓名" className="w-full border p-2 rounded" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div><label className="text-xs">取車</label><input type="datetime-local" className="w-full border p-2 rounded text-sm" value={orderFormData.start} onChange={e=>setOrderFormData({...orderFormData, start:e.target.value})} required/></div>
+                                        <div><label className="text-xs">還車</label><input type="datetime-local" className="w-full border p-2 rounded text-sm" value={orderFormData.end} onChange={e=>setOrderFormData({...orderFormData, end:e.target.value})} required/></div>
+                                    </div>
+                                    <div className="border p-2 rounded max-h-40 overflow-y-auto">
+                                        {vehicles.map(v=>{
+                                            const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
+                                            if (!available && !editingOrder) return null;
+                                            return (
+                                                <label key={v.id} className={`flex items-center gap-2 p-2 border-b ${!available ? 'opacity-50 bg-gray-50' : ''}`}>
+                                                    <input type="radio" name="vid" checked={Number(orderFormData.vehicleId)===v.id} onChange={()=>setOrderFormData({...orderFormData, vehicleId:v.id})} disabled={!available} />
+                                                    <span className="text-sm">{v.plate} ({v.model}) {!available && '(佔用中)'}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex gap-2 justify-end pt-2">
+                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="px-4 py-2 border rounded">取消</button>
+                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">儲存</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {isVehicleModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-md rounded-lg p-5">
+                                <h3 className="font-bold text-lg mb-4">{editingVehicle?'編輯':'新增'}車輛</h3>
+                                <form onSubmit={handleSaveVehicle} className="space-y-3">
+                                    <input placeholder="車牌" className="w-full border p-2 rounded" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                    <input placeholder="車型" className="w-full border p-2 rounded" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
+                                    <select className="w-full border p-2 rounded" value={vehicleFormData.tire} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}>
+                                        <option value="冬済">冬胎</option><option value="夏済">夏胎</option>
+                                    </select>
+                                    <div className="space-y-2">
+                                        <select className="w-full border p-2 rounded" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
+                                                <option value="">-- ETC 配置 --</option>
+                                                {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => (
+                                                    <option key={etc} value={etc}>{etc}</option>
+                                                ))}
+                                        </select>
+                                        <div className="flex gap-2">
+                                            <input placeholder="新卡號" className="w-full border p-2 rounded text-sm" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
+                                            <button type="button" onClick={()=>newEtcNumber && (setVehicleFormData({...vehicleFormData, etc:newEtcNumber}), setNewEtcNumber(''))} className="px-3 py-1 bg-green-500 text-white rounded text-xs whitespace-nowrap">新增</button>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 justify-end pt-2">
+                                        <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="px-4 py-2 border rounded">取消</button>
+                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">儲存</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
+            );
+        }
 
-                <label class="block">
-                    <span class="text-gray-700 font-medium">客戶姓名</span>
-                    <input type="text" id="customerName" name="customerName" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                </label>
-                
-                <label class="block">
-                    <span class="text-gray-700 font-medium">選定車牌 (Vehicle)</span>
-                    <select id="licensePlate" name="licensePlate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                        </select>
-                    <p id="vehicleSuggestionDisplay" class="text-xs text-green-600 mt-1 h-4"></p>
-                </label>
-                <p id="plateConflictMessage" class="hidden text-sm text-red-500 font-semibold">❌ 調度衝突！該車輛在選定時間已被預訂！</p>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <label class="block">
-                        <span class="text-blue-700 font-medium">交車時間 (Pickup)</span>
-                        <input type="datetime-local" id="pickupTime" name="pickupTime" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                    </label>
-                    <label class="block">
-                        <span class="text-red-700 font-medium">還車時間 (Return)</span>
-                        <input type="datetime-local" id="returnTime" name="returnTime" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                    </label>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <label class="block">
-                        <span class="text-blue-700 font-medium">交車地點</span>
-                        <input type="text" id="pickupLocation" name="pickupLocation" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                    </label>
-                    <label class="block">
-                        <span class="text-red-700 font-medium">還車地點</span>
-                        <input type="text" id="returnLocation" name="returnLocation" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                    </label>
-                </div>
-
-                <label class="block">
-                    <span class="text-gray-700 font-medium">備註 (包含 AI 解析的額外資訊)</span>
-                    <textarea id="notes" name="notes" rows="4" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2"></textarea>
-                </label>
-
-                <div class="pt-4 border-t text-right">
-                    <button type="submit" id="orderFormSubmit" class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition">
-                        建立訂單
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <div id="vehicleModal" class="modal hidden fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 md:p-8">
-            <div class="flex justify-between items-center pb-4 border-b">
-                <h3 id="vehicleModalTitle" class="text-xl font-bold text-gray-800">新增庫存車輛</h3>
-                <button onclick="closeModals()" class="text-gray-400 hover:text-gray-600">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            <form id="vehicleForm" class="py-4 space-y-4">
-                <label class="block">
-                    <span class="text-gray-700 font-medium">車型/特色描述 (Model)</span>
-                    <input type="text" id="vehicleModel" name="model" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                </label>
-                <label class="block">
-                    <span class="text-gray-700 font-medium">車牌號碼 (Plate)</span>
-                    <input type="text" id="vehiclePlate" name="plate" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                </label>
-                 <div class="grid grid-cols-2 gap-4">
-                    <label class="block">
-                        <span class="text-gray-700 font-medium">7碼內部編號 (Internal ID)</span>
-                        <input type="text" id="vehicleInternalId" name="internalId" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                    </label>
-                    <label class="block">
-                        <span class="text-gray-700 font-medium">座位數 (Seats)</span>
-                        <input type="number" id="vehicleSeats" name="seats" required min="1" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2">
-                    </label>
-                </div>
-                <label class="block">
-                    <span class="text-gray-700 font-medium">備註 (Notes)</span>
-                    <textarea id="vehicleNotes" name="notes" rows="2" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2"></textarea>
-                </label>
-
-                <div class="pt-4 border-t text-right">
-                    <button type="submit" id="vehicleFormSubmit" class="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition">
-                        新增車輛
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <div id="toastNotification" class="hidden fixed bottom-5 right-5 p-4 rounded-lg text-white shadow-lg z-50"></div>
-
+        const root = createRoot(document.getElementById('root'));
+        root.render(<VehicleOrderSystem />);
+    </script>
 </body>
 </html>
