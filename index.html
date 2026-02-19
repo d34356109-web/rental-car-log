@@ -366,6 +366,12 @@
                                                             {evt.order.customer} 
                                                             <span className="text-slate-300 mx-1">|</span> 
                                                             {evt.vehicle.model}
+                                                            {evt.order.note && (
+                                                                <>
+                                                                    <span className="text-slate-300 mx-1">|</span>
+                                                                    <span className="text-gray-400">備註: {evt.order.note}</span>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -504,7 +510,12 @@
                                                                                     {formatDateTime(order.end)}
                                                                                     <span className="text-xs text-slate-500 bg-slate-50 px-1 rounded border">@{order.returnLocation || '未指定'}</span>
                                                                                 </div>
-                                                                                {order.note && <div className="text-xs text-gray-400 mt-1 pl-10 border-l-2 border-gray-200 ml-1">{order.note}</div>}
+                                                                                {/* 備註顯示 */}
+                                                                                {order.note && (
+                                                                                    <div className="text-xs text-gray-500 mt-2 bg-yellow-50 p-2 rounded border border-yellow-100">
+                                                                                        <span className="font-semibold text-gray-600">備註：</span>{order.note}
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -592,11 +603,17 @@
                                                 <ArrowRight size={10} />
                                                 <span>{formatDateTime(o.end)}</span>
                                             </div>
-                                            <div className="text-xs text-slate-500 flex gap-2 mb-3">
+                                            <div className="text-xs text-slate-500 flex gap-2 mb-2">
                                                 <span className="bg-slate-50 px-1 rounded border">取: {o.pickupLocation}</span>
                                                 <span className="bg-slate-50 px-1 rounded border">還: {o.returnLocation}</span>
                                             </div>
-                                            <div className="flex justify-end gap-3 border-t pt-2">
+                                            {/* 訂單列表的備註顯示 */}
+                                            {o.note && (
+                                                <div className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded border border-gray-100">
+                                                    <span className="font-semibold text-gray-600">備註：</span>{o.note}
+                                                </div>
+                                            )}
+                                            <div className="flex justify-end gap-3 border-t pt-2 mt-2">
                                                 <button onClick={()=>{setEditingOrder(o); setOrderFormData(o); setIsOrderModalOpen(true)}} className="text-sm text-blue-600">編輯</button>
                                                 <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm text-red-600">刪除</button>
                                             </div>
@@ -656,6 +673,18 @@
                                                 onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} 
                                             />
                                         </div>
+                                    </div>
+
+                                    {/* 備註欄位 */}
+                                    <div>
+                                        <label className="text-xs block mb-1">備註事項 (選填)</label>
+                                        <textarea 
+                                            className="w-full border p-2 rounded text-sm" 
+                                            rows="2"
+                                            placeholder="請輸入其他需求或備註 (如：航班號碼、嬰兒座椅等)..."
+                                            value={orderFormData.note} 
+                                            onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})} 
+                                        ></textarea>
                                     </div>
 
                                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1 border-t pt-2">
