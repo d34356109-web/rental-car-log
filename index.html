@@ -79,7 +79,6 @@
             { location: '成田', plate: '品川302わ2282', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8026 8702 5853 4820 000', tire: '冬済' },
             { location: '成田', plate: '品川302わ6466', brand: 'Toyota', model: 'Alphard', feature: 'HEV', seats: 7, etc: '7070 3000 2295 9138', tire: '夏済' },
             { location: '成田', plate: '柏300わ2258', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4861 4901 000', tire: '冬済' },
-            // 新增兩台車
             { location: '成田', plate: '柏300わ2588', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 9901 007', tire: '冬済' },
             { location: '成田', plate: '柏300わ2599', brand: 'Toyota', model: 'Alphard', feature: '4WD', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済' },
         ];
@@ -95,6 +94,9 @@
             const [orders, setOrders] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
             
+            // 自訂彈出視窗狀態 (取代 alert 與 confirm)
+            const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
+
             // UI State for Expanded Cards
             const [expandedCards, setExpandedCards] = useState({});
 
@@ -114,6 +116,10 @@
                 location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済'
             });
             const [newEtcNumber, setNewEtcNumber] = useState('');
+
+            // 自訂彈出視窗工具函式
+            const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: null });
+            const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm });
 
             // Auth & Sync
             useEffect(() => {
@@ -193,6 +199,7 @@
                     const dayOrders = getDayOrders(v.id, filterDate);
                     const activeOrder = dayOrders.find(o => isOrderActiveNow(o));
                     const now = new Date();
+                    // 注意：這裡只從 dayOrders (當日訂單) 篩選出當日還沒開始的訂單，作為當日的未來預約
                     const futureOrders = dayOrders.filter(o => !isOrderActiveNow(o) && new Date(o.start) > now);
                     
                     // 決定排序權重 (越小越前面)
@@ -204,11 +211,11 @@
                         sortWeight = 1;
                         sortTime = new Date(activeOrder.end).getTime();
                     } else if (futureOrders.length > 0) {
-                        // 第二優先：即將有預約 (看誰先交車)
+                        // 第二優先：當日即將有預約 (看誰先交車)
                         sortWeight = 2;
                         sortTime = new Date(futureOrders[0].start).getTime();
                     } else {
-                        // 第三：空車
+                        // 第三：空車 (當日完全沒事，或已回庫)
                         sortWeight = 3;
                     }
 
@@ -221,9 +228,14 @@
                 });
             }, [vehicles, orders, filterDate]);
 
+            // 計算選定日期的真正空車 (當下未出租，且當日後續無預約)
+            const availableVehicles = useMemo(() => {
+                return sortedVehicles.filter(v => !v.activeOrder && v.futureOrders.length === 0);
+            }, [sortedVehicles]);
+
             // 一週內行程提醒邏輯 (已排除過去時間)
             const weeklyReminders = useMemo(() => {
-                const now = new Date(); // 取得當下時間
+                const now = new Date(); 
                 const startWindow = new Date(`${filterDate}T00:00:00`);
                 const endWindow = new Date(startWindow);
                 endWindow.setDate(endWindow.getDate() + 7);
@@ -268,20 +280,22 @@
             // Actions
             const handleSaveOrder = async (e) => {
                 e.preventDefault();
-                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end || !orderFormData.vehicleId) return alert("請填寫必填欄位");
-                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return alert("時間錯誤");
-                if (!isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) return alert("該時段車輛已被預約");
+                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end || !orderFormData.vehicleId) return showAlert("請填寫必填欄位");
+                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return showAlert("時間錯誤");
+                if (!isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) return showAlert("該時段車輛已被預約");
 
                 try {
                     const data = { ...orderFormData, updatedAt: serverTimestamp() };
                     if (editingOrder) await updateDoc(doc(db, 'orders', editingOrder.id), data);
                     else await addDoc(collection(db, 'orders'), { ...data, createdAt: serverTimestamp() });
                     setIsOrderModalOpen(false);
-                } catch (err) { alert("儲存失敗: " + err.message); }
+                } catch (err) { showAlert("儲存失敗: " + err.message); }
             };
 
-            const handleDeleteOrder = async (id) => {
-                if(window.confirm("確定刪除?")) await deleteDoc(doc(db, 'orders', id));
+            const handleDeleteOrder = (id) => {
+                showConfirm("確定刪除?", async () => { 
+                    await deleteDoc(doc(db, 'orders', id)); 
+                });
             };
 
             const handleSaveVehicle = async (e) => {
@@ -291,28 +305,53 @@
                     if (editingVehicle) await updateDoc(doc(db, 'vehicles', editingVehicle.id), data);
                     else await addDoc(collection(db, 'vehicles'), { ...data, createdAt: serverTimestamp() });
                     setIsVehicleModalOpen(false);
-                } catch (err) { alert("儲存失敗"); }
+                } catch (err) { showAlert("儲存失敗"); }
             };
 
-            const handleDeleteVehicle = async (id) => {
-                if(window.confirm("確定刪除?")) await deleteDoc(doc(db, 'vehicles', id));
+            const handleDeleteVehicle = (id) => {
+                showConfirm("確定刪除?", async () => { 
+                    await deleteDoc(doc(db, 'vehicles', id)); 
+                });
             };
 
-            const handleSeedData = async () => {
-                if(!window.confirm(`確定匯入 ${INITIAL_VEHICLES_SEED.length} 台車輛?`)) return;
-                try {
-                    const existingPlates = vehicles.map(v => v.plate);
-                    const newVehicles = INITIAL_VEHICLES_SEED.filter(v => !existingPlates.includes(v.plate));
-                    if (newVehicles.length === 0) return alert("預設車輛已存在，無需匯入");
-                    await Promise.all(newVehicles.map(v => addDoc(collection(db, 'vehicles'), { ...v, createdAt: serverTimestamp() })));
-                    alert(`成功匯入 ${newVehicles.length} 台新車輛！`);
-                } catch (e) { alert("失敗: " + e.message); }
+            const handleSeedData = () => {
+                showConfirm(`確定匯入 ${INITIAL_VEHICLES_SEED.length} 台車輛?`, async () => {
+                    try {
+                        const existingPlates = vehicles.map(v => v.plate);
+                        const newVehicles = INITIAL_VEHICLES_SEED.filter(v => !existingPlates.includes(v.plate));
+                        if (newVehicles.length === 0) return showAlert("預設車輛已存在，無需匯入");
+                        await Promise.all(newVehicles.map(v => addDoc(collection(db, 'vehicles'), { ...v, createdAt: serverTimestamp() })));
+                        showAlert(`成功匯入 ${newVehicles.length} 台新車輛！`);
+                    } catch (e) { showAlert("失敗: " + e.message); }
+                });
             };
 
             if (isLoading) return <div className="min-h-screen flex items-center justify-center text-slate-500">載入資料中...</div>;
 
             return (
                 <div className="pb-20 md:pb-0">
+                    {/* 共用彈出視窗 */}
+                    {dialog.isOpen && (
+                        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all">
+                                <h3 className="font-bold text-lg mb-3 text-slate-800 flex items-center gap-2">
+                                    {dialog.type === 'confirm' ? <AlertTriangle className="text-yellow-500 w-5 h-5"/> : <AlertCircle className="text-blue-500 w-5 h-5"/>}
+                                    {dialog.type === 'confirm' ? '請確認' : '系統提示'}
+                                </h3>
+                                <p className="text-slate-600 mb-6">{dialog.message}</p>
+                                <div className="flex justify-end gap-3">
+                                    {dialog.type === 'confirm' && (
+                                        <button onClick={() => setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null })} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 text-sm font-medium text-slate-700 transition-colors">取消</button>
+                                    )}
+                                    <button onClick={() => {
+                                        if (dialog.type === 'confirm' && dialog.onConfirm) dialog.onConfirm();
+                                        setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null });
+                                    }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm">確定</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <nav className="bg-slate-900 text-white p-4 sticky top-0 z-20 flex justify-between items-center shadow">
                         <div className="flex items-center gap-2 font-bold"><Car className="text-blue-400"/> 調度系統</div>
                         <div className="text-xs text-gray-400 flex items-center gap-1">
@@ -324,15 +363,28 @@
                         {vehicles.length < 10 && !isLoading && (
                             <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center">
                                 <span className="text-sm text-blue-800">快速開始：資料庫似乎缺少部分預設車輛，是否補齊？</span>
-                                <button onClick={handleSeedData} className="px-3 py-1 bg-blue-600 text-white text-xs rounded">一鍵補齊資料</button>
+                                <button onClick={handleSeedData} className="px-3 py-1 bg-blue-600 text-white text-xs rounded shadow-sm">一鍵補齊資料</button>
                             </div>
                         )}
 
                         {activeTab === 'dashboard' && (
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
-                                    <h2 className="font-bold flex items-center gap-2"><BellRing size={18} className="text-blue-600"/> 車輛調度看板</h2>
-                                    <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="border rounded p-1 font-medium text-slate-700" />
+                                {/* 看板 Header & 在庫小提醒 */}
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-3 rounded shadow-sm gap-3">
+                                    <div className="flex-1">
+                                        <h2 className="font-bold flex items-center gap-2"><BellRing size={18} className="text-blue-600"/> 車輛調度看板</h2>
+                                        <div className="text-xs text-slate-600 mt-1.5 flex flex-wrap items-center gap-1.5">
+                                            <span className="font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded border border-green-200">
+                                                目前在庫空車 ({availableVehicles.length} 輛)
+                                            </span>
+                                            <span className="leading-relaxed">
+                                                {availableVehicles.length > 0 
+                                                    ? availableVehicles.map(v => v.plate).join('、') 
+                                                    : '目前無空車'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} className="border border-slate-300 rounded-lg p-1.5 font-medium text-slate-700 text-sm shadow-sm w-full sm:w-auto" />
                                 </div>
 
                                 {/* 未來一週提醒區塊 */}
@@ -362,7 +414,7 @@
                                                             </div>
                                                             <span className="text-xs text-slate-500 font-medium">{evt.vehicle.plate}</span>
                                                         </div>
-                                                        <div className="text-xs text-slate-500 truncate">
+                                                        <div className="text-xs text-slate-500 truncate mt-0.5">
                                                             {evt.order.customer} 
                                                             <span className="text-slate-300 mx-1">|</span> 
                                                             {evt.vehicle.model}
@@ -385,11 +437,11 @@
                                 </div>
                                 <div className="space-y-3">
                                     {sortedVehicles.map(v => {
-                                        const dayOrders = v.dayOrders; // 當日行程 (用於狀態標籤)
-                                        const scheduleOrders = getVehicleSchedule(v.id, filterDate); // 完整排程 (用於展開列表)
+                                        const dayOrders = v.dayOrders; // 當日行程
+                                        const scheduleOrders = getVehicleSchedule(v.id, filterDate); // 完整排程 (含未來)
                                         
                                         const activeOrder = v.activeOrder;
-                                        const futureOrders = v.futureOrders;
+                                        const futureOrders = v.futureOrders; // 當日中，還沒開始的訂單
                                         const isRentedNow = !!activeOrder;
                                         const isExpanded = !!expandedCards[v.id];
 
@@ -413,8 +465,8 @@
                                                         
                                                         {/* Status Badges (Stacked) */}
                                                         <div className="flex flex-col items-end gap-1">
-                                                            {dayOrders.length === 0 && (
-                                                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold">空車</span>
+                                                            {(!isRentedNow && futureOrders.length === 0) && (
+                                                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold border border-green-200">🟢 目前空車</span>
                                                             )}
                                                             {isRentedNow && (
                                                                 <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-bold animate-pulse flex items-center gap-1">
@@ -454,8 +506,14 @@
                                                                     </span>
                                                                     <span className="text-gray-500 text-xs ml-auto">({futureOrders[0].customer})</span>
                                                                 </div>
+                                                            ) : dayOrders.length > 0 ? (
+                                                                <div className="flex items-center gap-2 text-sm">
+                                                                    <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-bold whitespace-nowrap border border-green-200">已回庫</span>
+                                                                    <span className="font-medium text-slate-800">{formatDateTime(dayOrders[dayOrders.length - 1].end)}</span>
+                                                                    <span className="text-gray-500 text-xs ml-auto">前單已結，可隨時派單</span>
+                                                                </div>
                                                             ) : (
-                                                                <div className="text-xs text-gray-400 italic">目前無排程，可隨時派單</div>
+                                                                <div className="text-xs text-gray-400 italic">全日無排程，可隨時派單</div>
                                                             )}
                                                         </div>
                                                     )}
@@ -632,7 +690,7 @@
 
                     {isOrderModalOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-md rounded-lg p-5 max-h-[90vh] overflow-y-auto">
+                            <div className="bg-white w-full max-w-md rounded-lg p-5 max-h-[90vh] overflow-y-auto shadow-2xl">
                                 <h3 className="font-bold text-lg mb-4">{editingOrder?'編輯':'新增'}訂單</h3>
                                 <form onSubmit={handleSaveOrder} className="space-y-3">
                                     <input placeholder="客戶姓名" className="w-full border p-2 rounded" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
@@ -754,8 +812,8 @@
                                         })}
                                     </div>
                                     <div className="flex gap-2 justify-end pt-2 border-t mt-2">
-                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="px-4 py-2 border rounded">取消</button>
-                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">儲存</button>
+                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="px-4 py-2 border rounded hover:bg-slate-50 text-slate-700">取消</button>
+                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">儲存</button>
                                     </div>
                                 </form>
                             </div>
@@ -764,7 +822,7 @@
 
                     {isVehicleModalOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-md rounded-lg p-5">
+                            <div className="bg-white w-full max-w-md rounded-lg p-5 shadow-2xl">
                                 <h3 className="font-bold text-lg mb-4">{editingVehicle?'編輯':'新增'}車輛</h3>
                                 <form onSubmit={handleSaveVehicle} className="space-y-3">
                                     <input placeholder="車牌" className="w-full border p-2 rounded" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
@@ -791,8 +849,8 @@
                                         </div>
                                     </div>
                                     <div className="flex gap-2 justify-end pt-2">
-                                        <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="px-4 py-2 border rounded">取消</button>
-                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">儲存</button>
+                                        <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="px-4 py-2 border rounded hover:bg-slate-50 text-slate-700">取消</button>
+                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">儲存</button>
                                     </div>
                                 </form>
                             </div>
