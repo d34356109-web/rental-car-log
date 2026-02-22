@@ -194,6 +194,20 @@
                 return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
             };
 
+            // 用於看板頂部「可空閒至何時」的短格式時間
+            const formatTimeUntil = (iso, targetTimeISO) => {
+                if (!iso) return '無排程';
+                const d = new Date(iso);
+                const t = new Date(targetTimeISO);
+                const isSameDay = d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
+                const hm = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                if (isSameDay) {
+                    return `本日 ${hm}`;
+                } else {
+                    return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${hm}`;
+                }
+            };
+
             // 格式化上方顯示的日本即時時間
             const liveTimeDisplay = useMemo(() => {
                 const timeStr = realTime.toLocaleString('zh-TW', {
@@ -244,6 +258,11 @@
                     const activeOrder = dayOrders.find(o => isOrderActiveAtTime(o, filterDateTime));
                     const futureOrders = dayOrders.filter(o => !isOrderActiveAtTime(o, filterDateTime) && new Date(o.start) > targetTime);
                     
+                    // 找出該車輛未來「最接近的一筆」訂單，不限於當日
+                    const absoluteNextOrder = orders
+                        .filter(o => o.vehicleId === v.id && o.status !== 'cancelled' && new Date(o.start) > targetTime)
+                        .sort((a, b) => new Date(a.start) - new Date(b.start))[0];
+                    
                     let sortWeight = 999; 
                     let sortTime = 0; 
 
@@ -251,16 +270,16 @@
                         // 第一優先：正在出租 (看誰先還車)
                         sortWeight = 1;
                         sortTime = new Date(activeOrder.end).getTime();
-                    } else if (futureOrders.length > 0) {
-                        // 第二優先：當日即將有預約 (看誰先交車)
+                    } else if (absoluteNextOrder) {
+                        // 第二優先：空閒中，但有未來預約 (看誰先交車)
                         sortWeight = 2;
-                        sortTime = new Date(futureOrders[0].start).getTime();
+                        sortTime = new Date(absoluteNextOrder.start).getTime();
                     } else {
-                        // 第三：空車
+                        // 第三：完全空車 (無任何後續排程)
                         sortWeight = 3;
                     }
 
-                    return { ...v, dayOrders, activeOrder, futureOrders, sortWeight, sortTime };
+                    return { ...v, dayOrders, activeOrder, futureOrders, absoluteNextOrder, sortWeight, sortTime };
                 });
 
                 return vehiclesWithStatus.sort((a, b) => {
@@ -269,8 +288,9 @@
                 });
             }, [vehicles, orders, filterDateTime]);
 
+            // 計算選定時間點的真正空車 (在指定時間未出租即為空閒)
             const availableVehicles = useMemo(() => {
-                return sortedVehicles.filter(v => !v.activeOrder && v.futureOrders.length === 0);
+                return sortedVehicles.filter(v => !v.activeOrder);
             }, [sortedVehicles]);
 
             // 一週內行程提醒邏輯 (以精確的日本時間為起點過濾)
@@ -437,7 +457,7 @@
 
                         {activeTab === 'dashboard' && (
                             <div className="space-y-4">
-                                {/* 看板 Header & 在庫小提醒 */}
+                                {/* 看板 Header & 在庫小提醒 (加入空閒時間追蹤) */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-3 rounded shadow-sm gap-3 border-l-4 border-l-blue-500">
                                     <div className="flex-1 w-full">
                                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
@@ -454,15 +474,24 @@
                                                 <input type="datetime-local" value={filterDateTime} onChange={e=>setFilterDateTime(e.target.value)} className="border border-slate-300 rounded-lg p-1.5 font-medium text-blue-700 text-sm shadow-sm bg-blue-50 focus:ring-2 focus:ring-blue-200 outline-none w-full sm:w-auto" />
                                             </div>
                                         </div>
-                                        <div className="text-xs text-slate-600 mt-2 flex flex-wrap items-center gap-1.5 bg-slate-50 p-2 rounded border">
-                                            <span className="font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded border border-green-200 flex items-center gap-1">
-                                                <Car size={12}/> 該時刻在庫空車 ({availableVehicles.length} 輛)
+                                        {/* 目前在庫空車強化版：清楚標示空閒至何時 */}
+                                        <div className="text-xs text-slate-600 mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                            <span className="font-semibold text-green-700 bg-green-100 px-2 py-1 rounded border border-green-200 flex items-center gap-1 whitespace-nowrap">
+                                                <Car size={14}/> 該時刻空閒車輛 ({availableVehicles.length})
                                             </span>
-                                            <span className="leading-relaxed">
+                                            <div className="flex flex-wrap gap-1.5 flex-1">
                                                 {availableVehicles.length > 0 
-                                                    ? availableVehicles.map(v => v.plate).join('、') 
-                                                    : '此時刻無空車'}
-                                            </span>
+                                                    ? availableVehicles.map(v => {
+                                                        const nextStr = v.absoluteNextOrder ? formatTimeUntil(v.absoluteNextOrder.start, filterDateTime) : '無排程';
+                                                        return (
+                                                            <span key={v.id} className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm">
+                                                                <span className="font-bold text-slate-700">{v.plate}</span> 
+                                                                <span className={`text-[10px] ${v.absoluteNextOrder ? 'text-orange-600' : 'text-slate-400'}`}>(至 {nextStr})</span>
+                                                            </span>
+                                                        );
+                                                    })
+                                                    : <span className="text-slate-500 py-1">此時刻無空車</span>}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -517,11 +546,9 @@
                                 </div>
                                 <div className="space-y-3">
                                     {sortedVehicles.map(v => {
-                                        const dayOrders = v.dayOrders; // 當日行程
-                                        const scheduleOrders = getVehicleSchedule(v.id, filterDateTime); // 完整排程 (含未來)
+                                        const scheduleOrders = getVehicleSchedule(v.id, filterDateTime); 
                                         
                                         const activeOrder = v.activeOrder;
-                                        const futureOrders = v.futureOrders; // 當日中，以選擇時間為準還沒開始的訂單
                                         const isRentedNow = !!activeOrder;
                                         const isExpanded = !!expandedCards[v.id];
 
@@ -529,7 +556,7 @@
                                             <div 
                                                 key={v.id} 
                                                 className={`bg-white rounded shadow-sm border-l-4 transition-all duration-200 cursor-pointer hover:shadow-md
-                                                    ${isRentedNow ? 'border-l-red-500' : (futureOrders.length > 0 ? 'border-l-yellow-400' : 'border-l-green-500')}
+                                                    ${isRentedNow ? 'border-l-red-500' : (v.absoluteNextOrder ? 'border-l-yellow-400' : 'border-l-green-500')}
                                                 `}
                                                 onClick={() => toggleExpand(v.id)}
                                             >
@@ -548,18 +575,18 @@
                                                         
                                                         {/* Status Badges (Stacked) */}
                                                         <div className="flex flex-col items-end gap-1">
-                                                            {(!isRentedNow && futureOrders.length === 0) && (
-                                                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold border border-green-200 shadow-sm">🟢 目前空車</span>
+                                                            {(!isRentedNow) && (
+                                                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold border border-green-200 shadow-sm">🟢 目前空閒</span>
                                                             )}
                                                             {isRentedNow && (
                                                                 <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-bold animate-pulse flex items-center gap-1 shadow-sm border border-red-200">
                                                                     <Clock size={12}/> 出租中
                                                                 </span>
                                                             )}
-                                                            {/* 只要行程表裡有未來的訂單，就顯示預約訂單標籤 */}
-                                                            {scheduleOrders.some(o => new Date(o.start) > new Date(filterDateTime)) && (
+                                                            {/* 若該車今天(相對過濾時間)有排程，給予警示 */}
+                                                            {v.futureOrders.length > 0 && (
                                                                 <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700 font-bold flex items-center gap-1 shadow-sm border border-yellow-200">
-                                                                    <AlertCircle size={12}/> 預約訂單
+                                                                    <AlertCircle size={12}/> 本日有預約
                                                                 </span>
                                                             )}
                                                             <div className="mt-1 text-gray-400 bg-slate-50 rounded-full p-0.5">
@@ -580,23 +607,20 @@
                                                                     </span>
                                                                     <span className="text-red-700 font-medium text-xs ml-auto truncate">({activeOrder.customer})</span>
                                                                 </div>
-                                                            ) : futureOrders.length > 0 ? (
-                                                                <div className="flex items-center gap-2 text-sm bg-yellow-50 p-1.5 rounded">
-                                                                    <span className="px-1.5 py-0.5 rounded bg-yellow-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">交車</span>
-                                                                    <span className="font-bold text-yellow-900">{formatDateTime(futureOrders[0].start)}</span>
-                                                                    <span className="text-[10px] text-slate-600 bg-white px-1 rounded flex items-center border border-yellow-100">
-                                                                        <MapPin size={10} className="mr-0.5 text-yellow-500"/> {futureOrders[0].pickupLocation || '未指定'}
+                                                            ) : v.absoluteNextOrder ? (
+                                                                <div className="flex items-center gap-2 text-sm bg-green-50 p-1.5 rounded border border-green-100">
+                                                                    <span className="px-1.5 py-0.5 rounded bg-green-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">可空閒至</span>
+                                                                    <span className="font-bold text-green-900">{formatDateTime(v.absoluteNextOrder.start)}</span>
+                                                                    <span className="text-[10px] text-slate-600 bg-white px-1 rounded flex items-center border border-green-200 truncate">
+                                                                        <MapPin size={10} className="mr-0.5 text-green-600"/> 下單: {v.absoluteNextOrder.pickupLocation || '未指定'}
                                                                     </span>
-                                                                    <span className="text-yellow-700 font-medium text-xs ml-auto truncate">({futureOrders[0].customer})</span>
-                                                                </div>
-                                                            ) : dayOrders.length > 0 ? (
-                                                                <div className="flex items-center gap-2 text-sm bg-green-50 p-1.5 rounded">
-                                                                    <span className="px-1.5 py-0.5 rounded bg-green-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">已回庫</span>
-                                                                    <span className="font-medium text-green-900">{formatDateTime(dayOrders[dayOrders.length - 1].end)}</span>
-                                                                    <span className="text-green-700 text-xs ml-auto font-medium">前單已結，可隨時派單</span>
+                                                                    <span className="text-green-800 font-medium text-xs ml-auto truncate">({v.absoluteNextOrder.customer})</span>
                                                                 </div>
                                                             ) : (
-                                                                <div className="text-xs text-gray-400 italic p-1.5">此時刻無排程，可隨時派單</div>
+                                                                <div className="flex items-center gap-2 text-sm bg-slate-50 p-1.5 rounded border border-slate-200">
+                                                                    <span className="px-1.5 py-0.5 rounded bg-slate-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">目前空閒</span>
+                                                                    <span className="font-medium text-slate-500 text-xs">無任何後續排程，可隨時派單</span>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     )}
@@ -666,8 +690,8 @@
                                                             <button onClick={()=>{
                                                                 setEditingOrder(null);
                                                                 let defaultStart = filterDateTime;
-                                                                if (dayOrders.length > 0) {
-                                                                    const lastEnd = new Date(dayOrders[dayOrders.length-1].end);
+                                                                if (v.dayOrders && v.dayOrders.length > 0) {
+                                                                    const lastEnd = new Date(v.dayOrders[v.dayOrders.length-1].end);
                                                                     lastEnd.setHours(lastEnd.getHours() + 1);
                                                                     defaultStart = getJSTString(lastEnd);
                                                                 }
