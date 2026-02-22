@@ -43,7 +43,8 @@
             Calendar, Car, Users, CreditCard, Snowflake, Sun,
             Plus, Search, Edit3, Trash2, Clock, Save, X, 
             LogOut, ShieldCheck, Database, CheckCircle, ArrowRight, AlertCircle,
-            ChevronDown, ChevronUp, BellRing, AlertTriangle, MapPin, RotateCcw
+            ChevronDown, ChevronUp, BellRing, AlertTriangle, MapPin, RotateCcw,
+            History
         } from 'lucide-react';
 
         // --- Firebase SDK ---
@@ -125,6 +126,7 @@
             const [editingVehicle, setEditingVehicle] = useState(null);
             
             const [searchTerm, setSearchTerm] = useState('');
+            const [historySearchTerm, setHistorySearchTerm] = useState('');
             
             // 將過濾日期預設為日本當下時間
             const [filterDateTime, setFilterDateTime] = useState(() => getJSTString(getJSTNominalDate()));
@@ -313,6 +315,25 @@
 
                 return events.sort((a, b) => a.time - b.time);
             }, [orders, vehicles, filterDateTime]);
+
+            // 分離當前訂單與歷史訂單
+            const { activeOrders, historyOrders } = useMemo(() => {
+                const now = getJSTNominalDate();
+                const active = [];
+                const history = [];
+
+                orders.forEach(o => {
+                    if (o.status === 'cancelled') {
+                        history.push(o);
+                    } else if (new Date(o.end) < now) {
+                        history.push(o); // 還車時間已過，視為歷史訂單
+                    } else {
+                        active.push(o); // 還沒結束的訂單
+                    }
+                });
+
+                return { activeOrders: active, historyOrders: history };
+            }, [orders, realTime]); // 依賴 realTime 讓狀態會隨時間自動切換
 
 
             // Actions
@@ -700,49 +721,158 @@
 
                         {activeTab === 'orders' && (
                             <div className="space-y-4">
-                                <button onClick={()=>{setEditingOrder(null); setOrderFormData({customer:'', start: getJSTString(getJSTNominalDate()), end:'', vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); setIsOrderModalOpen(true)}} className="w-full py-3 bg-blue-600 text-white rounded shadow font-bold flex justify-center gap-2"><Plus/> 新增訂單</button>
-                                {orders.sort((a,b)=>new Date(b.start)-new Date(a.start)).map(o => {
-                                    const v = vehicles.find(x=>x.id===o.vehicleId);
-                                    return (
-                                        <div key={o.id} className="bg-white p-4 rounded shadow-sm">
-                                            <div className="flex justify-between mb-1">
-                                                <span className="font-bold">{o.customer}</span>
-                                                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">{o.status}</span>
-                                            </div>
-                                            <div className="text-sm text-gray-800 mb-1">
-                                                {v?.plate || '車輛已刪除'}
-                                                {v?.feature ? ` (${v.feature})` : ''}
-                                            </div>
-                                            <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                                                <span>{formatDateTime(o.start)}</span>
-                                                <ArrowRight size={10} />
-                                                <span>{formatDateTime(o.end)}</span>
-                                            </div>
-                                            <div className="text-xs text-slate-500 flex gap-2 mb-2">
-                                                <span className="bg-slate-50 px-1 rounded border">取: {o.pickupLocation}</span>
-                                                <span className="bg-slate-50 px-1 rounded border">還: {o.returnLocation}</span>
-                                            </div>
-                                            {/* 訂單列表的備註顯示 */}
-                                            {o.note && (
-                                                <div className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded border border-gray-100">
-                                                    <span className="font-semibold text-gray-600">備註：</span>{o.note}
-                                                </div>
-                                            )}
-                                            <div className="flex justify-end gap-3 border-t pt-2 mt-2">
-                                                <button onClick={()=>{setEditingOrder(o); setOrderFormData(o); setIsOrderModalOpen(true)}} className="text-sm text-blue-600">編輯</button>
-                                                <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm text-red-600">刪除</button>
-                                            </div>
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                    <h2 className="font-bold text-lg text-slate-800">目前/預約中訂單</h2>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        <div className="relative flex-1">
+                                            <Search className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                                            <input 
+                                                type="text" 
+                                                placeholder="搜尋客戶或車牌..." 
+                                                className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none"
+                                                value={searchTerm}
+                                                onChange={e => setSearchTerm(e.target.value)}
+                                            />
                                         </div>
-                                    )
-                                })}
+                                    </div>
+                                </div>
+
+                                <button onClick={()=>{setEditingOrder(null); setOrderFormData({customer:'', start: getJSTString(getJSTNominalDate()), end:'', vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); setIsOrderModalOpen(true)}} className="w-full py-3 bg-blue-600 text-white rounded shadow font-bold flex justify-center gap-2"><Plus/> 新增訂單</button>
+                                
+                                {activeOrders.length === 0 ? (
+                                    <div className="text-center py-8 text-slate-500 bg-white rounded-lg border border-slate-100">沒有進行中或預約的訂單</div>
+                                ) : (
+                                    activeOrders
+                                    .filter(o => {
+                                        if (!searchTerm) return true;
+                                        const v = vehicles.find(x=>x.id===o.vehicleId);
+                                        const searchLower = searchTerm.toLowerCase();
+                                        return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
+                                    })
+                                    .sort((a,b)=>new Date(a.start)-new Date(b.start))
+                                    .map(o => {
+                                        const v = vehicles.find(x=>x.id===o.vehicleId);
+                                        const isActiveNow = isOrderActiveAtTime(o, getJSTString(getJSTNominalDate()));
+                                        
+                                        return (
+                                            <div key={o.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${isActiveNow ? 'border-l-red-500' : 'border-l-yellow-400'}`}>
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="font-bold text-lg text-slate-800">{o.customer}</span>
+                                                    <span className={`text-xs px-2 py-1 rounded font-bold ${isActiveNow ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                        {isActiveNow ? '進行中' : '已預約'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-sm text-gray-800 mb-2 font-medium">
+                                                    {v?.plate || '車輛已刪除'}
+                                                </div>
+                                                <div className="text-sm text-slate-700 mb-2 space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-green-700 bg-green-100 font-bold text-[10px] px-1.5 py-0.5 rounded w-9 text-center">取車</span>
+                                                        <span className="font-medium">{formatDateTime(o.start)}</span>
+                                                        <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">@{o.pickupLocation}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-red-700 bg-red-100 font-bold text-[10px] px-1.5 py-0.5 rounded w-9 text-center">還車</span>
+                                                        <span className="font-medium">{formatDateTime(o.end)}</span>
+                                                        <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">@{o.returnLocation}</span>
+                                                    </div>
+                                                </div>
+                                                {o.note && (
+                                                    <div className="text-xs text-gray-600 mb-3 bg-yellow-50/50 p-2 rounded border border-yellow-100">
+                                                        <span className="font-bold text-gray-700">備註：</span>{o.note}
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-end gap-3 border-t pt-2 mt-2">
+                                                    <button onClick={()=>{setEditingOrder(o); setOrderFormData(o); setIsOrderModalOpen(true)}} className="text-sm text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors">編輯</button>
+                                                    <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors">刪除</button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'history' && (
+                            <div className="space-y-4">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded shadow-sm border border-slate-100">
+                                    <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                        <History size={18} className="text-gray-500" /> 歷史訂單紀錄
+                                    </h2>
+                                    <div className="relative w-full sm:w-64">
+                                        <Search className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="搜尋客戶或車牌..." 
+                                            className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-200 outline-none"
+                                            value={historySearchTerm}
+                                            onChange={e => setHistorySearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="text-xs text-gray-500 px-2 flex items-center gap-1">
+                                    <AlertCircle size={12} /> 系統自動將「還車時間早於當下」或「手動取消」的訂單歸檔於此
+                                </div>
+
+                                {historyOrders.length === 0 ? (
+                                    <div className="text-center py-10 text-slate-400">尚無歷史訂單紀錄</div>
+                                ) : (
+                                    historyOrders
+                                    .filter(o => {
+                                        if (!historySearchTerm) return true;
+                                        const v = vehicles.find(x=>x.id===o.vehicleId);
+                                        const searchLower = historySearchTerm.toLowerCase();
+                                        return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
+                                    })
+                                    .sort((a,b)=>new Date(b.end)-new Date(a.end)) // 歷史訂單通常以結束時間越晚(越近期)的排越上面
+                                    .map(o => {
+                                        const v = vehicles.find(x=>x.id===o.vehicleId);
+                                        return (
+                                            <div key={o.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 opacity-80 hover:opacity-100 transition-opacity">
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="font-bold text-slate-700">{o.customer}</span>
+                                                    <span className="text-xs px-2 py-1 rounded font-bold bg-gray-200 text-gray-600">
+                                                        {o.status === 'cancelled' ? '已取消' : '已結束'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-sm text-gray-600 mb-2 font-medium">
+                                                    {v?.plate || '車輛已刪除'}
+                                                </div>
+                                                <div className="text-xs text-slate-500 mb-2 space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-8 text-slate-400">取車:</span>
+                                                        <span>{formatDateTime(o.start)}</span>
+                                                        <span className="ml-auto">@{o.pickupLocation}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-8 text-slate-400">還車:</span>
+                                                        <span>{formatDateTime(o.end)}</span>
+                                                        <span className="ml-auto">@{o.returnLocation}</span>
+                                                    </div>
+                                                </div>
+                                                {o.note && (
+                                                    <div className="text-xs text-gray-500 mb-2 p-2 bg-white rounded border border-slate-200">
+                                                        備註：{o.note}
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-end gap-3 border-t border-slate-200 pt-2 mt-2">
+                                                    <button onClick={()=>{setEditingOrder(o); setOrderFormData(o); setIsOrderModalOpen(true)}} className="text-xs text-blue-600 hover:underline">檢視/編輯</button>
+                                                    <button onClick={()=>handleDeleteOrder(o.id)} className="text-xs text-red-500 hover:underline">刪除紀錄</button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
                             </div>
                         )}
                     </main>
 
-                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-3 z-20 text-xs">
+                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-3 z-20 text-[10px] sm:text-xs">
                         <button onClick={()=>setActiveTab('dashboard')} className={`flex flex-col items-center ${activeTab==='dashboard'?'text-blue-600':'text-gray-400'}`}><Calendar size={20}/><span>看板</span></button>
                         <button onClick={()=>setActiveTab('vehicles')} className={`flex flex-col items-center ${activeTab==='vehicles'?'text-blue-600':'text-gray-400'}`}><Car size={20}/><span>車輛</span></button>
-                        <button onClick={()=>setActiveTab('orders')} className={`flex flex-col items-center ${activeTab==='orders'?'text-blue-600':'text-gray-400'}`}><Users size={20}/><span>訂單</span></button>
+                        <button onClick={()=>setActiveTab('orders')} className={`flex flex-col items-center ${activeTab==='orders'?'text-blue-600':'text-gray-400'}`}><Users size={20}/><span>當前訂單</span></button>
+                        <button onClick={()=>setActiveTab('history')} className={`flex flex-col items-center ${activeTab==='history'?'text-blue-600':'text-gray-400'}`}><History size={20}/><span>歷史紀錄</span></button>
                     </div>
 
                     {isOrderModalOpen && (
@@ -794,6 +924,18 @@
                                                 onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} 
                                             />
                                         </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600 block mb-1">訂單狀態</label>
+                                        <select 
+                                            className="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                                            value={orderFormData.status} 
+                                            onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}
+                                        >
+                                            <option value="confirmed">正常 (依時間自動判斷狀態)</option>
+                                            <option value="cancelled">已取消 (退單/未出席)</option>
+                                        </select>
                                     </div>
 
                                     {/* 備註欄位 */}
