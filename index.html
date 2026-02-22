@@ -194,6 +194,19 @@
                 return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
             };
 
+            // 用於排休建議的格式化 (包含週幾)
+            const formatDateOnly = (d) => {
+                if (!d) return '';
+                const days = ['日', '一', '二', '三', '四', '五', '六'];
+                return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} (週${days[d.getDay()]})`;
+            };
+            
+            const formatShortDateWithDay = (d) => {
+                if (!d) return '';
+                const days = ['日', '一', '二', '三', '四', '五', '六'];
+                return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}(週${days[d.getDay()]})`;
+            };
+
             // 用於看板頂部「可空閒至何時」的短格式時間
             const formatTimeUntil = (iso, targetTimeISO) => {
                 if (!iso) return '無排程';
@@ -292,6 +305,79 @@
             const availableVehicles = useMemo(() => {
                 return sortedVehicles.filter(v => !v.activeOrder);
             }, [sortedVehicles]);
+
+            // 人員可排休日 (該日無任何交車或還車動作)
+            const freeDaysData = useMemo(() => {
+                const targetDate = new Date(filterDateTime);
+                const startOfTargetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+                
+                const validOrders = orders.filter(o => o.status !== 'cancelled');
+                
+                // 尋找最後一個需要交車或還車的日子
+                let maxDate = startOfTargetDay;
+                let hasFutureEvents = false;
+
+                validOrders.forEach(o => {
+                    const oStart = new Date(o.start);
+                    const oEnd = new Date(o.end);
+                    if (oStart > maxDate) { maxDate = oStart; hasFutureEvents = true; }
+                    if (oEnd > maxDate) { maxDate = oEnd; hasFutureEvents = true; }
+                });
+
+                const freeDatesList = [];
+                // 若沒有未來訂單，直接回傳空狀態
+                if (!hasFutureEvents) {
+                    return { list: [], maxDate: maxDate, hasFutureEvents: false };
+                }
+
+                // 取 maxDate 的當天結束
+                const endOfMaxDay = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59);
+                let currentDate = new Date(startOfTargetDay);
+                
+                // 逐日檢查到最後一筆交/還車的日子
+                while (currentDate <= endOfMaxDay) {
+                    const dayStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0);
+                    const dayEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59);
+                    
+                    // 判斷這一天是否有「交車」或「還車」動作
+                    const hasEventOnThisDay = validOrders.some(o => {
+                        const oStart = new Date(o.start);
+                        const oEnd = new Date(o.end);
+                        const isPickupToday = oStart >= dayStart && oStart <= dayEnd;
+                        const isReturnToday = oEnd >= dayStart && oEnd <= dayEnd;
+                        return isPickupToday || isReturnToday;
+                    });
+                    
+                    // 只要當天不用交車也不用還車，就可以放假
+                    if (!hasEventOnThisDay) {
+                        freeDatesList.push(new Date(dayStart));
+                    }
+                    
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                // 將連續日期群組化 (例如：2/24 ~ 2/26)
+                const grouped = [];
+                if (freeDatesList.length > 0) {
+                    let currentGroup = [freeDatesList[0]];
+                    for (let i = 1; i < freeDatesList.length; i++) {
+                        const prev = freeDatesList[i-1];
+                        const curr = freeDatesList[i];
+                        const diffTime = Math.abs(curr - prev);
+                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)); 
+                        
+                        if (diffDays === 1) {
+                            currentGroup.push(curr);
+                        } else {
+                            grouped.push(currentGroup);
+                            currentGroup = [curr];
+                        }
+                    }
+                    grouped.push(currentGroup);
+                }
+                
+                return { list: grouped, maxDate: endOfMaxDay, hasFutureEvents: true };
+            }, [orders, filterDateTime]);
 
             // 一週內行程提醒邏輯 (以精確的日本時間為起點過濾)
             const weeklyReminders = useMemo(() => {
@@ -457,7 +543,7 @@
 
                         {activeTab === 'dashboard' && (
                             <div className="space-y-4">
-                                {/* 看板 Header & 在庫小提醒 (加入空閒時間追蹤) */}
+                                {/* 看板 Header & 在庫小提醒 */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-3 rounded shadow-sm gap-3 border-l-4 border-l-blue-500">
                                     <div className="flex-1 w-full">
                                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
@@ -493,6 +579,40 @@
                                                     : <span className="text-slate-500 py-1">此時刻無空車</span>}
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* 人員可排休日區塊 */}
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden">
+                                    <div className="bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 flex justify-between items-center border-b border-emerald-200">
+                                        <span className="flex items-center gap-1"><Sun size={14} className="text-emerald-600"/> 人員可排休日</span>
+                                        {freeDaysData.hasFutureEvents && (
+                                            <span className="text-[10px] text-emerald-600">計算至: {formatShortDateWithDay(freeDaysData.maxDate)}</span>
+                                        )}
+                                    </div>
+                                    <div className="p-3 bg-white text-sm">
+                                        {!freeDaysData.hasFutureEvents ? (
+                                            <div className="text-emerald-600 font-medium text-center text-xs">目前無任何未來交/還車行程，隨時可安排休假 🎉</div>
+                                        ) : freeDaysData.list.length === 0 ? (
+                                            <div className="text-slate-500 italic text-center text-xs">直至最後一筆行程前，每日皆需交/還車，無法全日排休。</div>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-2">
+                                                {freeDaysData.list.map((group, i) => {
+                                                    const start = group[0];
+                                                    const end = group[group.length - 1];
+                                                    const isSingle = start.getTime() === end.getTime();
+                                                    return (
+                                                        <span key={i} className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1.5 rounded-md text-xs font-bold shadow-sm flex items-center">
+                                                            {isSingle 
+                                                                ? formatDateOnly(start) 
+                                                                : `${formatDateOnly(start)} ~ ${formatShortDateWithDay(end)}`
+                                                            }
+                                                            <span className="ml-1.5 text-[10px] bg-emerald-600 text-white px-1 py-0.5 rounded">可放假</span>
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
