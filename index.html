@@ -76,11 +76,11 @@
             { location: '成田', plate: 'なにわ334わ8888', brand: 'Toyota', model: 'Alphard', feature: '40系 Captain', seats: 7, etc: '7804 2150 2134 9280', tire: '冬済' },
             { location: '成田', plate: 'なにわ335わ8888', brand: 'Toyota', model: 'Alphard', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4860 6901 000', tire: '冬済' },
             { location: '成田', plate: '品川302わ2282', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8026 8702 5853 4820 000', tire: '冬済' },
-            { location: '成田', plate: '品川302わ6466', brand: 'Toyota', model: 'Alphard', feature: 'HEV', seats: 7, etc: '7070 3000 2295 9138', tire: '夏済' },
             { location: '成田', plate: '柏300わ2258', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4861 4901 000', tire: '冬済' },
             { location: '成田', plate: '柏300わ2588', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 9901 007', tire: '冬済' },
             { location: '成田', plate: '柏300わ2599', brand: 'Toyota', model: 'Alphard', feature: '4WD', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済' },
-            { location: '成田', plate: '品川302わ4695', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済' },
+            { location: '成田', plate: 'なにわ342わ88', brand: 'Toyota', model: 'Vellfire', feature: '', seats: 7, etc: '', tire: '冬済' },
+            { location: '成田', plate: '品川302わ4724', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済' },
         ];
 
         // 常用地點選項
@@ -479,7 +479,7 @@
                                                             {evt.vehicle.model}
                                                             {evt.order.note && (
                                                                 <>
-                                                                    <span className="text-slate-300">|</span>
+                                                                    <span className="text-slate-300 mx-1">|</span>
                                                                     <span className="text-gray-400 truncate max-w-[150px]">備註: {evt.order.note}</span>
                                                                 </>
                                                             )}
@@ -626,8 +626,8 @@
                                                                                     <span className="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm ml-auto">@{order.pickupLocation || '未指定'}</span>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <span className="text-red-700 bg-red-100 font-bold text-[10px] px-1.5 py-0.5 rounded w-9 text-center">還車</span>
-                                                                                    <span className="font-medium">{formatDateTime(order.end)}</span>
+                                                                                    <span className="text-red-600 font-medium text-xs w-8">還車</span>
+                                                                                    {formatDateTime(order.end)}
                                                                                     <span className="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm ml-auto">@{order.returnLocation || '未指定'}</span>
                                                                                 </div>
                                                                                 {/* 備註顯示 */}
