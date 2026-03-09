@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>車輛訂單管理系統</title>
+    <title>車輛訂單管理系統 PRO (極致調度版)</title>
     
-    <!-- Tailwind CSS (樣式庫) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 解決 React 在瀏覽器直接運行的相依性問題 -->
+    <!-- React & Firebase Importmap -->
     <script type="importmap">
       {
         "imports": {
@@ -22,20 +22,30 @@
       }
     </script>
     
-    <!-- Babel (讓瀏覽器看懂 JSX) -->
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
-        /* 隱藏未載入時的閃爍 */
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f1f5f9; }
         #root:empty { display: none; }
-        .transition-max-height { transition: max-height 0.3s ease-in-out; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        input[type="number"]::-webkit-outer-spin-button, 
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(226, 232, 240, 0.8);
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <!-- 主程式邏輯 -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
@@ -44,10 +54,10 @@
             Plus, Search, Edit3, Trash2, Clock, Save, X, 
             LogOut, ShieldCheck, Database, CheckCircle, ArrowRight, AlertCircle,
             ChevronDown, ChevronUp, BellRing, AlertTriangle, MapPin, RotateCcw,
-            History
+            History, Activity, Zap, CheckCircle2, Navigation
         } from 'lucide-react';
 
-        // --- Firebase SDK ---
+        // --- Firebase 設定 ---
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { 
@@ -55,7 +65,6 @@
             serverTimestamp 
         } from 'firebase/firestore';
 
-        // 🔴 請在這裡填入您的 Firebase 設定 (保留引號) 🔴
         const firebaseConfig = {
             apiKey: "AIzaSyDq65URVL5sppv-2yXBh8DQuEwaXm5u5k0",
             authDomain: "myrentalcarsystem-a88fb.firebaseapp.com",
@@ -65,57 +74,44 @@
             appId: "1:1076727464488:web:9599c788414f5211896b1d"
         };
 
-        // 初始化 Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- 預設資料 ---
+        // 預設資料
         const INITIAL_VEHICLES_SEED = [
-            { location: '成田', plate: '成田330わ888', brand: 'Toyota', model: 'Vellfire', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4861 3901 001', tire: '冬済' },
-            { location: '成田', plate: '和泉330わ2222', brand: 'Toyota', model: 'Alphard', feature: '', seats: 8, etc: '8001 6161 4860 7900 000', tire: '冬済' },
-            { location: '成田', plate: 'なにわ334わ8888', brand: 'Toyota', model: 'Alphard', feature: '40系 Captain', seats: 7, etc: '7804 2150 2134 9280', tire: '冬済' },
-            { location: '成田', plate: 'なにわ335わ8888', brand: 'Toyota', model: 'Alphard', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4860 6901 000', tire: '冬済' },           
-            { location: '成田', plate: '柏300わ2258', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4861 4901 000', tire: '冬済' },
-            { location: '成田', plate: '柏300わ2588', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 9901 007', tire: '冬済' },
-            { location: '成田', plate: '柏300わ2599', brand: 'Toyota', model: 'Alphard', feature: '4WD', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済' },
-            { location: '成田', plate: 'なにわ342わ88', brand: 'Toyota', model: 'Vellfire', feature: '', seats: 7, etc: '', tire: '冬済' },            
+            { location: '成田', plate: '成田330わ888', brand: 'Toyota', model: 'Vellfire', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4861 3901 001', tire: '冬済', status: 'active' },
+            { location: '成田', plate: '和泉330わ2222', brand: 'Toyota', model: 'Alphard', feature: '', seats: 8, etc: '8001 6161 4860 7900 000', tire: '冬済', status: 'active' },
+            { location: '成田', plate: 'なにわ334わ8888', brand: 'Toyota', model: 'Alphard', feature: '40系 Captain', seats: 7, etc: '7804 2150 2134 9280', tire: '冬済', status: 'active' },
+            { location: '成田', plate: 'なにわ335わ8888', brand: 'Toyota', model: 'Alphard', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4860 6901 000', tire: '冬済', status: 'active' },           
+            { location: '成田', plate: '柏300わ2258', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4861 4901 000', tire: '冬済', status: 'active' },
+            { location: '成田', plate: '柏300わ2588', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 9901 007', tire: '冬済', status: 'active' },
+            { location: '成田', plate: '柏300わ2599', brand: 'Toyota', model: 'Alphard', feature: '4WD', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済', status: 'active' },
+            { location: '成田', plate: 'なにわ342わ88', brand: 'Toyota', model: 'Vellfire', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active' }
         ];
-
-        // 常用地點選項
         const PRESET_LOCATIONS = ["成田二航", "成田一航", "羽田"];
 
-        // --- 日本時間處理工具 ---
-        // 取得目前的「日本標準時間」Date 物件
-        const getJSTNominalDate = () => {
-            return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
-        };
-        
-        // 將 Date 物件轉為 datetime-local 支援的 YYYY-MM-DDTHH:mm 格式
+        // --- 時間工具 ---
+        const getJSTNominalDate = () => new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
         const getJSTString = (dateObj) => {
-            const y = dateObj.getFullYear();
-            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const d = String(dateObj.getDate()).padStart(2, '0');
-            const h = String(dateObj.getHours()).padStart(2, '0');
-            const min = String(dateObj.getMinutes()).padStart(2, '0');
-            return `${y}-${m}-${d}T${h}:${min}`;
+            const pad = n => String(n).padStart(2, '0');
+            return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}T${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}`;
+        };
+        const getNextHourJSTString = () => {
+            let d = getJSTNominalDate();
+            d.setHours(d.getHours() + 1, 0, 0, 0);
+            return getJSTString(d);
         };
 
-        // --- React Component ---
         function VehicleOrderSystem() {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('dashboard');
             const [vehicles, setVehicles] = useState([]);
             const [orders, setOrders] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
-            
-            // 即時時間狀態
             const [realTime, setRealTime] = useState(new Date());
 
-            // 自訂彈出視窗狀態
             const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
-
-            // UI State for Expanded Cards
             const [expandedCards, setExpandedCards] = useState({});
 
             const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
@@ -123,390 +119,86 @@
             const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
             const [editingVehicle, setEditingVehicle] = useState(null);
             
+            // 🔥 新增：管理排休彈窗 與 ETC 新卡號
+            const [isVacationModalOpen, setIsVacationModalOpen] = useState(false);
+            const [newEtcNumber, setNewEtcNumber] = useState('');
+
             const [searchTerm, setSearchTerm] = useState('');
             const [historySearchTerm, setHistorySearchTerm] = useState('');
-            
-            // 將過濾日期預設為日本當下時間
             const [filterDateTime, setFilterDateTime] = useState(() => getJSTString(getJSTNominalDate()));
 
             const [orderFormData, setOrderFormData] = useState({
-                customer: '', start: '', end: '', vehicleId: '', note: '', status: 'confirmed',
-                pickupLocation: '', returnLocation: ''
+                customer: '', start: '', end: '', vehicleId: '', note: '', status: 'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'
             });
             const [vehicleFormData, setVehicleFormData] = useState({
                 location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'
             });
-            const [newEtcNumber, setNewEtcNumber] = useState('');
 
-            // 工具：顯示對話框
-            const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: null });
+            const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert' });
             const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm });
 
-            // 時鐘計時器
+            // 時鐘
             useEffect(() => {
-                const timer = setInterval(() => {
-                    setRealTime(new Date());
-                }, 1000);
+                const timer = setInterval(() => setRealTime(new Date()), 1000);
                 return () => clearInterval(timer);
             }, []);
 
-            // Auth & Sync
+            // Firebase 監聽
             useEffect(() => {
                 signInAnonymously(auth).catch(console.error);
-                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                return onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
                     if (currentUser) {
-                        const unsubVehicles = onSnapshot(collection(db, 'vehicles'), (snap) => {
+                        const unsubV = onSnapshot(collection(db, 'vehicles'), snap => {
                             setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                             setIsLoading(false);
                         });
-                        const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-                            setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                        });
-                        return () => { unsubVehicles(); unsubOrders(); };
-                    } else {
-                        setIsLoading(false);
-                    }
+                        const unsubO = onSnapshot(collection(db, 'orders'), snap => setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                        return () => { unsubV(); unsubO(); };
+                    } else setIsLoading(false);
                 });
-                return () => unsubscribe();
             }, []);
 
-            // Toggle Expand
-            const toggleExpand = (id) => {
-                setExpandedCards(prev => ({
-                    ...prev,
-                    [id]: !prev[id]
-                }));
-            };
-
-            // Helpers
-            const formatDateTime = (iso) => {
+            // 格式化工具
+            const formatDateTime = iso => {
                 if (!iso) return '';
                 const d = new Date(iso);
-                return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
             };
-            
-            const formatTimeOnly = (iso) => {
-                if (!iso) return '';
-                const d = new Date(iso);
-                return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-            };
-
-            // 用於排休建議的格式化 (包含週幾)
             const formatDateOnly = (d) => {
                 if (!d) return '';
                 const days = ['日', '一', '二', '三', '四', '五', '六'];
                 return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} (週${days[d.getDay()]})`;
             };
-            
             const formatShortDateWithDay = (d) => {
                 if (!d) return '';
                 const days = ['日', '一', '二', '三', '四', '五', '六'];
                 return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}(週${days[d.getDay()]})`;
             };
-
-            // 用於看板頂部「可空閒至何時」的短格式時間
             const formatTimeUntil = (iso, targetTimeISO) => {
                 if (!iso) return '無排程';
-                const d = new Date(iso);
-                const t = new Date(targetTimeISO);
-                const isSameDay = d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
-                const hm = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-                if (isSameDay) {
-                    return `本日 ${hm}`;
-                } else {
-                    return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${hm}`;
-                }
+                const d = new Date(iso), t = new Date(targetTimeISO);
+                const isSameDay = d.toDateString() === t.toDateString();
+                const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                return isSameDay ? `本日 ${hm}` : `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${hm}`;
             };
 
-            // 格式化上方顯示的日本即時時間
             const liveTimeDisplay = useMemo(() => {
-                const timeStr = realTime.toLocaleString('zh-TW', {
-                    timeZone: 'Asia/Tokyo',
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit',
-                    hour12: false
-                });
-                return `${timeStr} (日本時間)`;
+                return realTime.toLocaleString('zh-TW', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             }, [realTime]);
 
-            const getDayOrders = (vid, dateTimeStr) => {
-                const selectedDate = new Date(dateTimeStr);
-                const startOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0);
-                const endOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59);
-                return orders
-                    .filter(o => o.vehicleId === vid && o.status !== 'cancelled' && new Date(o.start) < endOfDay && new Date(o.end) > startOfDay)
-                    .sort((a, b) => new Date(a.start) - new Date(b.start));
-            };
-
-            const getVehicleSchedule = (vid, dateTimeStr) => {
-                const selectedDate = new Date(dateTimeStr);
-                const startOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0);
-                return orders
-                    .filter(o => o.vehicleId === vid && o.status !== 'cancelled' && new Date(o.end) > startOfDay)
-                    .sort((a, b) => new Date(a.start) - new Date(b.start));
-            };
-
+            // 核心邏輯
             const isVehicleAvailable = (vid, start, end, excludeId) => {
-                if (!start || !end) return false;
-                const s = new Date(start);
-                const e = new Date(end);
-                const now = getJSTNominalDate();
-                
-                const vehicle = vehicles.find(v => v.id === vid);
-                // 針對未來或正在進行的訂單，若車輛維修中則無法使用
-                if (vehicle && vehicle.status === 'maintenance' && e > now) {
-                    return false;
-                }
-
+                if (!start || !end) return true;
+                const s = new Date(start), e = new Date(end), now = getJSTNominalDate();
+                const v = vehicles.find(v => v.id === vid);
+                if (v?.status === 'maintenance' && e > now) return false;
                 return !orders.some(o => o.vehicleId === vid && o.id !== excludeId && o.status !== 'cancelled' && s < new Date(o.end) && e > new Date(o.start));
             };
 
             const isOrderActiveAtTime = (order, targetTimeStr) => {
-                const targetTime = new Date(targetTimeStr);
-                const start = new Date(order.start);
-                const end = new Date(order.end);
-                return targetTime >= start && targetTime <= end;
-            };
-
-            // Sorting Logic for Dashboard
-            const sortedVehicles = useMemo(() => {
-                const targetTime = new Date(filterDateTime);
-                
-                const vehiclesWithStatus = vehicles.map(v => {
-                    const isMaintenance = v.status === 'maintenance';
-                    const dayOrders = getDayOrders(v.id, filterDateTime);
-                    const activeOrder = dayOrders.find(o => isOrderActiveAtTime(o, filterDateTime));
-                    const futureOrders = dayOrders.filter(o => !isOrderActiveAtTime(o, filterDateTime) && new Date(o.start) > targetTime);
-                    
-                    // 找出該車輛未來「最接近的一筆」訂單，不限於當日
-                    const absoluteNextOrder = orders
-                        .filter(o => o.vehicleId === v.id && o.status !== 'cancelled' && new Date(o.start) > targetTime)
-                        .sort((a, b) => new Date(a.start) - new Date(b.start))[0];
-                    
-                    let sortWeight = 999; 
-                    let sortTime = 0; 
-
-                    if (isMaintenance) {
-                        // 維修中車輛排在最後面
-                        sortWeight = 4;
-                    } else if (activeOrder) {
-                        // 第一優先：正在出租 (看誰先還車)
-                        sortWeight = 1;
-                        sortTime = new Date(activeOrder.end).getTime();
-                    } else if (absoluteNextOrder) {
-                        // 第二優先：空閒中，但有未來預約 (看誰先交車)
-                        sortWeight = 2;
-                        sortTime = new Date(absoluteNextOrder.start).getTime();
-                    } else {
-                        // 第三：完全空車 (無任何後續排程)
-                        sortWeight = 3;
-                    }
-
-                    return { ...v, dayOrders, activeOrder, futureOrders, absoluteNextOrder, isMaintenance, sortWeight, sortTime };
-                });
-
-                return vehiclesWithStatus.sort((a, b) => {
-                    if (a.sortWeight !== b.sortWeight) return a.sortWeight - b.sortWeight;
-                    return a.sortTime - b.sortTime;
-                });
-            }, [vehicles, orders, filterDateTime]);
-
-            // 計算選定時間點的真正空車 (在指定時間未出租即為空閒，且非維修中)
-            const availableVehicles = useMemo(() => {
-                return sortedVehicles.filter(v => !v.activeOrder && !v.isMaintenance);
-            }, [sortedVehicles]);
-
-            // 人員可排休日 (該日無任何交車或還車動作)
-            const freeDaysData = useMemo(() => {
-                const targetDate = new Date(filterDateTime);
-                const startOfTargetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
-                
-                const validOrders = orders.filter(o => o.status !== 'cancelled');
-                
-                // 尋找最後一個需要交車或還車的日子
-                let maxDate = startOfTargetDay;
-                let hasFutureEvents = false;
-
-                validOrders.forEach(o => {
-                    const oStart = new Date(o.start);
-                    const oEnd = new Date(o.end);
-                    if (oStart > maxDate) { maxDate = oStart; hasFutureEvents = true; }
-                    if (oEnd > maxDate) { maxDate = oEnd; hasFutureEvents = true; }
-                });
-
-                const freeDatesList = [];
-                // 若沒有未來訂單，直接回傳空狀態
-                if (!hasFutureEvents) {
-                    return { list: [], maxDate: maxDate, hasFutureEvents: false };
-                }
-
-                // 取 maxDate 的當天結束
-                const endOfMaxDay = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59);
-                let currentDate = new Date(startOfTargetDay);
-                
-                // 逐日檢查到最後一筆交/還車的日子
-                while (currentDate <= endOfMaxDay) {
-                    const dayStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0);
-                    const dayEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59);
-                    
-                    // 判斷這一天是否有「交車」或「還車」動作
-                    const hasEventOnThisDay = validOrders.some(o => {
-                        const oStart = new Date(o.start);
-                        const oEnd = new Date(o.end);
-                        const isPickupToday = oStart >= dayStart && oStart <= dayEnd;
-                        const isReturnToday = oEnd >= dayStart && oEnd <= dayEnd;
-                        return isPickupToday || isReturnToday;
-                    });
-                    
-                    // 只要當天不用交車也不用還車，就可以放假
-                    if (!hasEventOnThisDay) {
-                        freeDatesList.push(new Date(dayStart));
-                    }
-                    
-                    currentDate.setDate(currentDate.getDate() + 1);
-                }
-
-                // 將連續日期群組化 (例如：2/24 ~ 2/26)
-                const grouped = [];
-                if (freeDatesList.length > 0) {
-                    let currentGroup = [freeDatesList[0]];
-                    for (let i = 1; i < freeDatesList.length; i++) {
-                        const prev = freeDatesList[i-1];
-                        const curr = freeDatesList[i];
-                        const diffTime = Math.abs(curr - prev);
-                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)); 
-                        
-                        if (diffDays === 1) {
-                            currentGroup.push(curr);
-                        } else {
-                            grouped.push(currentGroup);
-                            currentGroup = [curr];
-                        }
-                    }
-                    grouped.push(currentGroup);
-                }
-                
-                return { list: grouped, maxDate: endOfMaxDay, hasFutureEvents: true };
-            }, [orders, filterDateTime]);
-
-            // 14日內行程提醒邏輯 (以精確的日本時間為起點過濾)
-            const weeklyReminders = useMemo(() => {
-                const targetJstDate = getJSTNominalDate(); // 現實的日本時間 (用於過濾已過去的訂單)
-                const startWindow = new Date(`${filterDateTime.split('T')[0]}T00:00:00`); 
-                const endWindow = new Date(startWindow);
-                endWindow.setDate(endWindow.getDate() + 14); // 改為 14 天
-
-                const events = [];
-                orders.forEach(o => {
-                    if (o.status === 'cancelled') return;
-                    
-                    const startDate = new Date(o.start);
-                    const endDate = new Date(o.end);
-                    const vehicle = vehicles.find(v => v.id === o.vehicleId);
-                    
-                    if (!vehicle) return;
-
-                    // 檢查交車 (Pickup) - 需在搜尋區間內 且 晚於日本當下時間
-                    if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) {
-                        events.push({
-                            id: `start-${o.id}`,
-                            type: 'pickup',
-                            time: startDate,
-                            order: o,
-                            vehicle: vehicle
-                        });
-                    }
-
-                    // 檢查還車 (Return) - 需在搜尋區間內 且 晚於日本當下時間
-                    if (endDate >= startWindow && endDate <= endWindow && endDate > targetJstDate) {
-                        events.push({
-                            id: `end-${o.id}`,
-                            type: 'return',
-                            time: endDate,
-                            order: o,
-                            vehicle: vehicle
-                        });
-                    }
-                });
-
-                return events.sort((a, b) => a.time - b.time);
-            }, [orders, vehicles, filterDateTime]);
-
-            // 分離當前訂單與歷史訂單
-            const { activeOrders, historyOrders } = useMemo(() => {
-                const now = getJSTNominalDate();
-                const active = [];
-                const history = [];
-
-                orders.forEach(o => {
-                    if (o.status === 'cancelled') {
-                        history.push(o);
-                    } else if (new Date(o.end) < now) {
-                        history.push(o); // 還車時間已過，視為歷史訂單
-                    } else {
-                        active.push(o); // 還沒結束的訂單
-                    }
-                });
-
-                return { activeOrders: active, historyOrders: history };
-            }, [orders, realTime]); 
-
-            // -- 輔助運算：是否有原車處於維修中 (移至元件主體) --
-            const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
-            const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
-
-            // Actions
-            const handleEditOrder = (o) => {
-                const carInfo = vehicles.find(x => x.id === o.vehicleId);
-                const now = getJSTNominalDate();
-                const isFuture = new Date(o.end) > now;
-                setEditingOrder(o);
-                setOrderFormData({
-                    ...o, 
-                    // 若原指派車輛已轉為維修狀態，強制清空車輛選項，要求使用者重新指派
-                    vehicleId: (carInfo && carInfo.status === 'maintenance' && isFuture) ? '' : o.vehicleId
-                }); 
-                setIsOrderModalOpen(true);
-            };
-
-            const handleSaveOrder = async (e) => {
-                e.preventDefault();
-                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end || !orderFormData.vehicleId) return showAlert("請填寫必填欄位，並確保已指派車輛");
-                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return showAlert("時間錯誤，還車時間必須晚於取車時間");
-                
-                if (!isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) {
-                    return showAlert("所選車輛在該時段已被預約或處於維修狀態");
-                }
-
-                try {
-                    const data = { ...orderFormData, updatedAt: serverTimestamp() };
-                    if (editingOrder) await updateDoc(doc(db, 'orders', editingOrder.id), data);
-                    else await addDoc(collection(db, 'orders'), { ...data, createdAt: serverTimestamp() });
-                    setIsOrderModalOpen(false);
-                } catch (err) { showAlert("儲存失敗: " + err.message); }
-            };
-
-            const handleDeleteOrder = (id) => {
-                showConfirm("確定刪除?", async () => { 
-                    await deleteDoc(doc(db, 'orders', id)); 
-                });
-            };
-
-            const handleSaveVehicle = async (e) => {
-                e.preventDefault();
-                try {
-                    const data = { ...vehicleFormData, updatedAt: serverTimestamp() };
-                    if (editingVehicle) await updateDoc(doc(db, 'vehicles', editingVehicle.id), data);
-                    else await addDoc(collection(db, 'vehicles'), { ...data, createdAt: serverTimestamp() });
-                    setIsVehicleModalOpen(false);
-                } catch (err) { showAlert("儲存失敗"); }
-            };
-
-            const handleDeleteVehicle = (id) => {
-                showConfirm("確定刪除?", async () => { 
-                    await deleteDoc(doc(db, 'vehicles', id)); 
-                });
+                const t = new Date(targetTimeStr), s = new Date(order.start), e = new Date(order.end);
+                return t >= s && t <= e && order.status !== 'cancelled';
             };
 
             const handleSeedData = () => {
@@ -521,174 +213,308 @@
                 });
             };
 
-            if (isLoading) return <div className="min-h-screen flex items-center justify-center text-slate-500">載入資料中...</div>;
+            const dashboardStats = useMemo(() => {
+                const nowStr = filterDateTime;
+                let activeCount = 0, maintenanceCount = 0, availableCount = 0;
+                vehicles.forEach(v => {
+                    if (v.status === 'maintenance') { maintenanceCount++; return; }
+                    const isActive = orders.some(o => o.vehicleId === v.id && isOrderActiveAtTime(o, nowStr));
+                    if (isActive) activeCount++;
+                    else availableCount++;
+                });
+                return { total: vehicles.length, active: activeCount, maintenance: maintenanceCount, available: availableCount };
+            }, [vehicles, orders, filterDateTime]);
+
+            const sortedVehicles = useMemo(() => {
+                const targetTime = new Date(filterDateTime);
+                return vehicles.map(v => {
+                    const isMaintenance = v.status === 'maintenance';
+                    const dayOrders = orders.filter(o => o.vehicleId === v.id && o.status !== 'cancelled' && new Date(o.end) > new Date(new Date(filterDateTime).setHours(0,0,0,0)));
+                    const activeOrder = dayOrders.find(o => isOrderActiveAtTime(o, filterDateTime));
+                    const futureOrders = dayOrders.filter(o => !isOrderActiveAtTime(o, filterDateTime) && new Date(o.start) > targetTime);
+                    const absoluteNextOrder = orders.filter(o => o.vehicleId === v.id && o.status !== 'cancelled' && new Date(o.start) > targetTime).sort((a,b)=>new Date(a.start)-new Date(b.start))[0];
+                    
+                    let sortWeight = isMaintenance ? 4 : (activeOrder ? 1 : (absoluteNextOrder ? 2 : 3));
+                    let sortTime = activeOrder ? new Date(activeOrder.end).getTime() : (absoluteNextOrder ? new Date(absoluteNextOrder.start).getTime() : 0);
+                    
+                    return { ...v, activeOrder, futureOrders, absoluteNextOrder, isMaintenance, sortWeight, sortTime, dayOrders };
+                }).sort((a, b) => a.sortWeight !== b.sortWeight ? a.sortWeight - b.sortWeight : a.sortTime - b.sortTime);
+            }, [vehicles, orders, filterDateTime]);
+
+            const availableVehicles = useMemo(() => sortedVehicles.filter(v => !v.activeOrder && !v.isMaintenance), [sortedVehicles]);
+
+            // 人員排休計算
+            const freeDaysData = useMemo(() => {
+                const targetDate = new Date(filterDateTime);
+                const startOfTargetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+                const validOrders = orders.filter(o => o.status !== 'cancelled');
+                
+                let maxDate = startOfTargetDay, hasFutureEvents = false;
+                validOrders.forEach(o => {
+                    const oStart = new Date(o.start), oEnd = new Date(o.end);
+                    if (oStart > maxDate) { maxDate = oStart; hasFutureEvents = true; }
+                    if (oEnd > maxDate) { maxDate = oEnd; hasFutureEvents = true; }
+                });
+
+                const freeDatesList = [];
+                if (!hasFutureEvents) return { list: [], maxDate: maxDate, hasFutureEvents: false };
+
+                const endOfMaxDay = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59);
+                let currentDate = new Date(startOfTargetDay);
+                
+                while (currentDate <= endOfMaxDay) {
+                    const dayStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0);
+                    const dayEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59);
+                    
+                    const hasEventOnThisDay = validOrders.some(o => {
+                        const oStart = new Date(o.start), oEnd = new Date(o.end);
+                        return (oStart >= dayStart && oStart <= dayEnd) || (oEnd >= dayStart && oEnd <= dayEnd);
+                    });
+                    
+                    if (!hasEventOnThisDay) freeDatesList.push(new Date(dayStart));
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                const grouped = [];
+                if (freeDatesList.length > 0) {
+                    let currentGroup = [freeDatesList[0]];
+                    for (let i = 1; i < freeDatesList.length; i++) {
+                        const prev = freeDatesList[i-1], curr = freeDatesList[i];
+                        if (Math.round(Math.abs(curr - prev) / (1000 * 60 * 60 * 24)) === 1) currentGroup.push(curr);
+                        else { grouped.push(currentGroup); currentGroup = [curr]; }
+                    }
+                    grouped.push(currentGroup);
+                }
+                
+                return { list: grouped, maxDate: endOfMaxDay, hasFutureEvents: true };
+            }, [orders, filterDateTime]);
+
+            const weeklyReminders = useMemo(() => {
+                const targetJstDate = getJSTNominalDate(); 
+                const startWindow = new Date(`${filterDateTime.split('T')[0]}T00:00:00`); 
+                const endWindow = new Date(startWindow);
+                endWindow.setDate(endWindow.getDate() + 14); 
+
+                const events = [];
+                orders.forEach(o => {
+                    if (o.status === 'cancelled') return;
+                    const startDate = new Date(o.start), endDate = new Date(o.end);
+                    const vehicle = vehicles.find(v => v.id === o.vehicleId);
+                    if (!vehicle) return;
+
+                    if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) 
+                        events.push({ id: `start-${o.id}`, type: 'pickup', time: startDate, order: o, vehicle });
+                    if (endDate >= startWindow && endDate <= endWindow && endDate > targetJstDate) 
+                        events.push({ id: `end-${o.id}`, type: 'return', time: endDate, order: o, vehicle });
+                });
+                return events.sort((a, b) => a.time - b.time);
+            }, [orders, vehicles, filterDateTime]);
+
+            const { activeOrders, historyOrders } = useMemo(() => {
+                const now = getJSTNominalDate();
+                const active = [], history = [];
+                orders.forEach(o => {
+                    if (o.status === 'cancelled' || new Date(o.end) < now) history.push(o);
+                    else active.push(o);
+                });
+                return { activeOrders: active, historyOrders: history };
+            }, [orders, realTime]); 
+
+            const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
+            const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
+
+            const handleQuickReturn = (order) => {
+                showConfirm(`確定將 ${order.customer} 的訂單標記為「已提早歸還」嗎？\n(還車時間將改為現在)`, async () => {
+                    try {
+                        const now = getJSTString(getJSTNominalDate());
+                        await updateDoc(doc(db, 'orders', order.id), { end: now, updatedAt: serverTimestamp() });
+                        showAlert("✅ 車輛已歸還，訂單已移至歷史紀錄！");
+                    } catch(e) { showAlert("錯誤: " + e.message); }
+                });
+            };
+
+            const handleEditOrder = (o) => {
+                const carInfo = vehicles.find(x => x.id === o.vehicleId);
+                const isFuture = new Date(o.end) > getJSTNominalDate();
+                setEditingOrder(o);
+                setOrderFormData({
+                    ...o, 
+                    vehicleId: (carInfo && carInfo.status === 'maintenance' && isFuture) ? '' : o.vehicleId
+                }); 
+                setIsOrderModalOpen(true);
+            };
+
+            const handleSaveOrder = async (e) => {
+                e.preventDefault();
+                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end || !orderFormData.vehicleId) return showAlert("請填寫必填欄位");
+                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return showAlert("時間錯誤，還車時間必須晚於取車時間");
+                if (!isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) return showAlert("所選車輛在該時段已被預約或處於維修狀態");
+
+                try {
+                    const data = { ...orderFormData, updatedAt: serverTimestamp() };
+                    if (editingOrder) await updateDoc(doc(db, 'orders', editingOrder.id), data);
+                    else await addDoc(collection(db, 'orders'), { ...data, createdAt: serverTimestamp() });
+                    setIsOrderModalOpen(false);
+                } catch (err) { showAlert("儲存失敗: " + err.message); }
+            };
+
+            const handleDeleteItem = (collectionName, id) => {
+                showConfirm("資料刪除後無法復原，確定刪除?", async () => await deleteDoc(doc(db, collectionName, id)));
+            };
+
+            const calculateProgress = (start, end) => {
+                const s = new Date(start).getTime(), e = new Date(end).getTime(), n = getJSTNominalDate().getTime();
+                if (n < s) return 0;
+                if (n > e) return 100;
+                return Math.max(0, Math.min(100, ((n - s) / (e - s)) * 100));
+            };
+
+            if (isLoading) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-400 bg-slate-50">載入雲端資料中...</div>;
 
             return (
-                <div className="pb-28 md:pb-8">
-                    {/* 共用彈出視窗 */}
+                <div className="pb-24">
+                    {/* 共用 Dialog */}
                     {dialog.isOpen && (
-                        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                            <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all">
-                                <h3 className="font-bold text-lg mb-3 text-slate-800 flex items-center gap-2">
-                                    {dialog.type === 'confirm' ? <AlertTriangle className="text-yellow-500 w-5 h-5"/> : <AlertCircle className="text-blue-500 w-5 h-5"/>}
-                                    {dialog.type === 'confirm' ? '請確認' : '系統提示'}
+                        <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+                                <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                                    {dialog.type === 'confirm' ? <AlertTriangle className="text-amber-500"/> : <CheckCircle2 className="text-blue-500"/>}
+                                    {dialog.type === 'confirm' ? '請確認操作' : '系統提示'}
                                 </h3>
-                                <p className="text-slate-600 mb-6">{dialog.message}</p>
+                                <p className="text-slate-600 mb-6 text-sm leading-relaxed">{dialog.message}</p>
                                 <div className="flex justify-end gap-3">
                                     {dialog.type === 'confirm' && (
-                                        <button onClick={() => setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null })} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 text-sm font-medium text-slate-700 transition-colors">取消</button>
+                                        <button onClick={() => setDialog({ isOpen: false, type: 'alert' })} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-medium text-slate-700 transition-colors">取消</button>
                                     )}
-                                    <button onClick={() => {
-                                        if (dialog.type === 'confirm' && dialog.onConfirm) dialog.onConfirm();
-                                        setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null });
-                                    }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm">確定</button>
+                                    <button onClick={() => { if(dialog.onConfirm) dialog.onConfirm(); setDialog({ isOpen: false, type: 'alert' }); }} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-md">確定</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* 頂部導覽列 加入即時時間 */}
-                    <nav className="bg-slate-900 text-white p-4 sticky top-0 z-20 flex justify-between items-center shadow">
-                        <div className="flex items-center gap-2 font-bold"><Car className="text-blue-400"/> 調度系統</div>
-                        <div className="text-xs text-gray-400 flex items-center gap-4">
-                            <span className="font-mono text-slate-300 bg-slate-800 px-2 py-1 rounded hidden sm:inline-block border border-slate-700">
-                                {liveTimeDisplay}
-                            </span>
-                            {user ? <span className="text-green-400 flex items-center gap-1">● 線上</span> : <span>連線中...</span>}
+                    {/* 頂部 Header */}
+                    <nav className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sticky top-0 z-20 shadow-lg flex justify-between items-center">
+                        <div className="flex items-center gap-2 font-black tracking-wider text-lg">
+                            <Car className="text-blue-400 fill-blue-400/20"/> 調度中心 <span className="text-xs bg-blue-600 px-1.5 py-0.5 rounded text-white ml-1">PRO</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="text-xs bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 font-mono flex items-center gap-2 shadow-inner">
+                                <Clock size={12} className="text-blue-400"/>
+                                <span>{liveTimeDisplay}</span> <span className="hidden sm:inline text-slate-400">JST</span>
+                            </div>
                         </div>
                     </nav>
 
-                    {/* 手機版時間顯示 (螢幕太小時顯示在導覽列下方) */}
-                    <div className="sm:hidden bg-slate-800 text-slate-300 text-xs text-center py-1 font-mono border-b border-slate-700">
-                        {liveTimeDisplay}
-                    </div>
-
-                    <main className="p-4 max-w-5xl mx-auto">
+                    <main className="p-4 max-w-5xl mx-auto space-y-5">
+                        
                         {vehicles.length < INITIAL_VEHICLES_SEED.length && !isLoading && (
-                            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center">
-                                <span className="text-sm text-blue-800">快速開始：資料庫似乎缺少部分預設車輛，是否補齊？</span>
-                                <button onClick={handleSeedData} className="px-3 py-1 bg-blue-600 text-white text-xs rounded shadow-sm">一鍵補齊資料</button>
+                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex justify-between items-center shadow-sm">
+                                <span className="text-sm text-blue-800 font-medium">快速開始：資料庫似乎缺少部分預設車輛</span>
+                                <button onClick={handleSeedData} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs rounded-lg shadow-sm font-bold">一鍵補齊資料</button>
                             </div>
                         )}
 
                         {activeTab === 'dashboard' && (
                             <div className="space-y-4">
-                                {/* 看板 Header & 在庫小提醒 */}
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-3 rounded shadow-sm gap-3 border-l-4 border-l-blue-500">
-                                    <div className="flex-1 w-full">
-                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
-                                            <h2 className="font-bold flex items-center gap-2 text-slate-800">
-                                                <Calendar size={18} className="text-blue-600"/> 調度視角
-                                            </h2>
-                                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                                                <button 
-                                                    onClick={() => setFilterDateTime(getJSTString(getJSTNominalDate()))}
-                                                    className="text-xs font-bold bg-white text-slate-700 border border-slate-300 rounded-lg px-2 py-1.5 shadow-sm hover:bg-slate-100 flex items-center gap-1 transition-colors whitespace-nowrap"
-                                                >
-                                                    <RotateCcw size={14} className="text-blue-600" /> 回到現在
-                                                </button>
-                                                <input type="datetime-local" value={filterDateTime} onChange={e=>setFilterDateTime(e.target.value)} className="border border-slate-300 rounded-lg p-1.5 font-medium text-blue-700 text-sm shadow-sm bg-blue-50 focus:ring-2 focus:ring-blue-200 outline-none w-full sm:w-auto" />
-                                            </div>
+                                <div className="grid grid-cols-4 gap-2 sm:gap-4">
+                                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-slate-400 text-[10px] sm:text-xs font-bold mb-1">總車數</span>
+                                        <span className="text-xl sm:text-2xl font-black text-slate-700">{dashboardStats.total}</span>
+                                    </div>
+                                    <div className="bg-green-50 p-3 rounded-2xl shadow-sm border border-green-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-green-600 text-[10px] sm:text-xs font-bold mb-1">在庫空車</span>
+                                        <span className="text-xl sm:text-2xl font-black text-green-700">{dashboardStats.available}</span>
+                                    </div>
+                                    <div className="bg-blue-50 p-3 rounded-2xl shadow-sm border border-blue-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-blue-600 text-[10px] sm:text-xs font-bold mb-1">出租中</span>
+                                        <span className="text-xl sm:text-2xl font-black text-blue-700">{dashboardStats.active}</span>
+                                    </div>
+                                    <div className="bg-rose-50 p-3 rounded-2xl shadow-sm border border-rose-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-rose-600 text-[10px] sm:text-xs font-bold mb-1">維修保養</span>
+                                        <span className="text-xl sm:text-2xl font-black text-rose-700">{dashboardStats.maintenance}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                        <div className="flex items-center gap-2 text-slate-800 font-bold text-lg">
+                                            <Calendar className="text-blue-600" size={20}/> 時空檢視
                                         </div>
-                                        {/* 目前在庫空車強化版：清楚標示空閒至何時 */}
-                                        <div className="text-xs text-slate-600 mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                                            <span className="font-semibold text-green-700 bg-green-100 px-2 py-1 rounded border border-green-200 flex items-center gap-1 whitespace-nowrap">
-                                                <Car size={14}/> 該時刻空閒車輛 ({availableVehicles.length})
-                                            </span>
-                                            <div className="flex flex-wrap gap-1.5 flex-1">
-                                                {availableVehicles.length > 0 
-                                                    ? availableVehicles.map(v => {
-                                                        const nextStr = v.absoluteNextOrder ? formatTimeUntil(v.absoluteNextOrder.start, filterDateTime) : '無排程';
-                                                        return (
-                                                            <span key={v.id} className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm">
-                                                                <span className="font-bold text-slate-700">{v.plate}</span> 
-                                                                <span className={`text-[10px] ${v.absoluteNextOrder ? 'text-orange-600' : 'text-slate-400'}`}>(至 {nextStr})</span>
-                                                            </span>
-                                                        );
-                                                    })
-                                                    : <span className="text-slate-500 py-1">此時刻無空車</span>}
-                                            </div>
+                                        <div className="flex items-center gap-2 w-full sm:w-auto bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                                            <button onClick={() => setFilterDateTime(getJSTString(getJSTNominalDate()))} className="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg shadow-sm border border-slate-200 flex items-center gap-1 hover:text-blue-600 transition-colors whitespace-nowrap">
+                                                <RotateCcw size={14} /> 回到現在
+                                            </button>
+                                            <input type="datetime-local" value={filterDateTime} onChange={e=>setFilterDateTime(e.target.value)} className="bg-transparent border-none text-sm font-bold text-blue-700 focus:ring-0 outline-none w-full cursor-pointer" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="text-xs text-slate-600 mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                        <span className="font-bold text-green-700 bg-green-100 px-2 py-1.5 rounded-lg border border-green-200 flex items-center gap-1 whitespace-nowrap">
+                                            <Car size={14}/> 該時刻空車 ({availableVehicles.length})
+                                        </span>
+                                        <div className="flex flex-wrap gap-1.5 flex-1">
+                                            {availableVehicles.length > 0 ? availableVehicles.map(v => {
+                                                const nextStr = v.absoluteNextOrder ? formatTimeUntil(v.absoluteNextOrder.start, filterDateTime) : '無排程';
+                                                return (
+                                                    <span key={v.id} className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm">
+                                                        <span className="font-bold text-slate-700">{v.plate}</span> 
+                                                        <span className={`text-[10px] ${v.absoluteNextOrder ? 'text-amber-600' : 'text-slate-400'}`}>(至 {nextStr})</span>
+                                                    </span>
+                                                );
+                                            }) : <span className="text-slate-400 py-1 italic">此時刻無任何空車</span>}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* 人員可排休日區塊 */}
-                                <div className="bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden">
-                                    <div className="bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 flex justify-between items-center border-b border-emerald-200">
-                                        <span className="flex items-center gap-1"><Sun size={14} className="text-emerald-600"/> 人員可排休日</span>
-                                        {freeDaysData.hasFutureEvents && (
-                                            <span className="text-[10px] text-emerald-600">計算至: {formatShortDateWithDay(freeDaysData.maxDate)}</span>
-                                        )}
+                                {/* 🔥 優化：將人員排休移入按鈕，點擊彈出 */}
+                                <button onClick={() => setIsVacationModalOpen(true)} className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 p-3.5 rounded-2xl flex justify-between items-center transition-colors shadow-sm border border-emerald-100">
+                                    <div className="flex items-center gap-2 font-bold text-sm">
+                                        <div className="bg-emerald-200/50 p-1.5 rounded-lg"><Sun size={18} className="text-emerald-600"/></div>
+                                        智能調度建議：檢視人員可排休日
                                     </div>
-                                    <div className="p-3 bg-white text-sm">
-                                        {!freeDaysData.hasFutureEvents ? (
-                                            <div className="text-emerald-600 font-medium text-center text-xs">目前無任何未來交/還車行程，隨時可安排休假 🎉</div>
-                                        ) : freeDaysData.list.length === 0 ? (
-                                            <div className="text-slate-500 italic text-center text-xs">直至最後一筆行程前，每日皆需交/還車，無法全日排休。</div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-2">
-                                                {freeDaysData.list.map((group, i) => {
-                                                    const start = group[0];
-                                                    const end = group[group.length - 1];
-                                                    const isSingle = start.getTime() === end.getTime();
-                                                    return (
-                                                        <span key={i} className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1.5 rounded-md text-xs font-bold shadow-sm flex items-center">
-                                                            {isSingle 
-                                                                ? formatDateOnly(start) 
-                                                                : `${formatDateOnly(start)} ~ ${formatShortDateWithDay(end)}`
-                                                            }
-                                                            <span className="ml-1.5 text-[10px] bg-emerald-600 text-white px-1 py-0.5 rounded">可放假</span>
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
+                                    <div className="flex items-center gap-2 text-xs font-medium">
+                                        <span className="hidden sm:inline bg-emerald-100 px-2 py-1 rounded">
+                                            {freeDaysData.hasFutureEvents ? `分析至: ${formatShortDateWithDay(freeDaysData.maxDate)}` : '近期無排程'}
+                                        </span>
+                                        <ArrowRight size={16} className="text-emerald-600"/>
                                     </div>
-                                </div>
+                                </button>
 
-                                {/* 未來 14 日提醒區塊 */}
-                                <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-                                    <div className="bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 flex justify-between items-center border-b border-slate-200">
-                                        <span className="flex items-center gap-1"><BellRing size={14}/> 未來 14 日行程提醒 ({weeklyReminders.length})</span>
-                                        <span className="text-[10px] text-slate-400">依所選時間排序 (已隱藏過期)</span>
+                                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                                    <div className="bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 flex justify-between items-center border-b border-slate-200">
+                                        <span className="flex items-center gap-1.5"><BellRing size={16} className="text-blue-500"/> 未來 14 日行程動態 ({weeklyReminders.length})</span>
+                                        <span className="text-[10px] text-slate-400 font-medium">依您所選的時間為起點</span>
                                     </div>
-                                    <div className="max-h-40 overflow-y-auto divide-y divide-slate-100">
+                                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-100">
                                         {weeklyReminders.length === 0 ? (
-                                            <div className="p-4 text-center text-xs text-slate-400 italic">未來 14 日無待辦行程</div>
+                                            <div className="p-6 text-center text-sm font-medium text-slate-400">未來 14 日內無待辦行程</div>
                                         ) : (
                                             weeklyReminders.map(evt => (
-                                                <div key={evt.id} className={`p-2 flex items-center gap-3 text-sm transition-colors ${evt.vehicle.status === 'maintenance' ? 'bg-red-50/50 hover:bg-red-50' : 'hover:bg-white'}`}>
-                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap w-12 text-center border ${evt.type === 'pickup' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
+                                                <div key={evt.id} className={`p-3 flex items-center gap-3 text-sm transition-colors hover:bg-slate-50 ${evt.vehicle.status === 'maintenance' ? 'bg-rose-50/50' : ''}`}>
+                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap w-14 text-center border shadow-sm ${evt.type === 'pickup' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-rose-100 text-rose-800 border-rose-200'}`}>
                                                         {evt.type === 'pickup' ? '🟡 交車' : '🔴 還車'}
                                                     </div>
-                                                    <div className="flex-1">
-                                                        <div className="flex justify-between items-center">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-center mb-0.5">
                                                             <div className="flex items-center gap-2">
                                                                 <span className="font-bold text-slate-700">{formatDateTime(evt.time)}</span>
-                                                                {/* 顯示地點 */}
-                                                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1 rounded border border-slate-200 flex items-center gap-0.5 shadow-sm hidden sm:flex">
-                                                                    <MapPin size={10}/>
-                                                                    {evt.type === 'pickup' ? (evt.order.pickupLocation || '未指定') : (evt.order.returnLocation || '未指定')}
+                                                                <span className="hidden sm:flex text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 items-center gap-0.5">
+                                                                    <MapPin size={10}/> {evt.type === 'pickup' ? evt.order.pickupLocation : evt.order.returnLocation}
                                                                 </span>
                                                             </div>
                                                             {evt.vehicle.status === 'maintenance' ? (
-                                                                <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-300 font-bold animate-pulse hover:bg-red-200 shadow-sm flex items-center gap-1 cursor-pointer">
-                                                                    <AlertTriangle size={10}/> 維修中 (重新指派)
+                                                                <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded border border-rose-300 font-bold animate-pulse hover:bg-rose-200 flex items-center gap-1">
+                                                                    <AlertTriangle size={10}/> 維修中 (需換車)
                                                                 </button>
                                                             ) : (
-                                                                <span className="text-xs text-slate-600 font-bold bg-slate-200 px-1.5 rounded">{evt.vehicle.plate}</span>
+                                                                <span className="text-xs text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{evt.vehicle.plate}</span>
                                                             )}
                                                         </div>
-                                                        <div className="text-xs text-slate-500 truncate mt-0.5 flex items-center gap-1">
-                                                            <span className="font-medium text-slate-700">{evt.order.customer}</span> 
+                                                        <div className="text-xs text-slate-500 truncate flex items-center gap-1">
+                                                            <span className="font-bold text-slate-700">{evt.order.customer}</span> 
                                                             <span className="text-slate-300">|</span> 
-                                                            <span className={evt.vehicle.status === 'maintenance' ? 'text-red-500 line-through' : ''}>{evt.vehicle.model}</span>
-                                                            {evt.order.note && (
-                                                                <>
-                                                                    <span className="text-slate-300 mx-1">|</span>
-                                                                    <span className="text-gray-400 truncate max-w-[150px]">備註: {evt.order.note}</span>
-                                                                </>
-                                                            )}
+                                                            <span className={evt.vehicle.status === 'maintenance' ? 'text-rose-500 line-through' : ''}>{evt.vehicle.model}</span>
+                                                            {evt.order.note && <span className="text-slate-400 truncate ml-1 bg-slate-50 px-1 rounded">備註: {evt.order.note}</span>}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -697,201 +523,129 @@
                                     </div>
                                 </div>
 
-                                <div className="text-xs text-gray-500 px-2 flex justify-between pt-2">
-                                    <span>卡片排序：🔴還車優先 -> 🟡交車優先 -> 🟢空車</span>
+                                <div className="text-[10px] sm:text-xs text-slate-400 font-medium px-2 flex items-center gap-1 pt-1">
+                                    <AlertCircle size={12} /> 車輛卡片智能排序：<span className="text-blue-500">🔵 出租中(依還車時間)</span> ➔ <span className="text-amber-500">🟡 已預約(依交車時間)</span> ➔ <span className="text-green-500">🟢 完全空車</span>
                                 </div>
+
                                 <div className="space-y-3">
                                     {sortedVehicles.map(v => {
-                                        const scheduleOrders = getVehicleSchedule(v.id, filterDateTime); 
-                                        
-                                        const activeOrder = v.activeOrder;
-                                        const isRentedNow = !!activeOrder;
-                                        const isMaintenance = v.isMaintenance;
                                         const isExpanded = !!expandedCards[v.id];
+                                        const { activeOrder, absoluteNextOrder, isMaintenance } = v;
+                                        
+                                        let statusColor = "bg-green-50 border-green-200 text-green-700";
+                                        let statusText = "空閒中";
+                                        if (isMaintenance) { statusColor = "bg-rose-50 border-rose-200 text-rose-700"; statusText = "維修中"; }
+                                        else if (activeOrder) { statusColor = "bg-blue-50 border-blue-200 text-blue-700"; statusText = "出租中"; }
 
-                                        let borderColorClass = 'border-l-green-500';
-                                        if (isMaintenance) borderColorClass = 'border-l-gray-400 opacity-80';
-                                        else if (isRentedNow) borderColorClass = 'border-l-red-500';
-                                        else if (v.absoluteNextOrder) borderColorClass = 'border-l-yellow-400';
+                                        let progress = activeOrder ? calculateProgress(activeOrder.start, activeOrder.end) : 0;
 
                                         return (
-                                            <div 
-                                                key={v.id} 
-                                                className={`bg-white rounded shadow-sm border-l-4 transition-all duration-200 cursor-pointer hover:shadow-md ${borderColorClass}`}
-                                                onClick={() => toggleExpand(v.id)}
-                                            >
-                                                {/* Card Header */}
-                                                <div className="p-4">
-                                                    <div className="flex justify-between items-start mb-2">
+                                            <div key={v.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md">
+                                                {activeOrder && (
+                                                    <div className="h-1.5 w-full bg-slate-100">
+                                                        <div className={`h-full transition-all duration-1000 ${progress > 85 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
+                                                    </div>
+                                                )}
+
+                                                <div className="p-4 cursor-pointer flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center" onClick={() => setExpandedCards(prev => ({...prev, [v.id]: !prev[v.id]}))}>
+                                                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                                                        <div className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${statusColor} whitespace-nowrap`}>{statusText}</div>
                                                         <div>
-                                                            <div className="font-bold text-lg text-slate-800">{v.plate}</div>
-                                                            <div className="text-sm text-gray-500 flex items-center gap-1 flex-wrap mt-0.5">
+                                                            <div className="font-black text-lg text-slate-800 tracking-wide">{v.plate}</div>
+                                                            <div className="text-xs text-slate-500 font-medium flex gap-2 flex-wrap items-center mt-0.5">
                                                                 <span>{v.model}</span>
-                                                                {v.feature && <><span className="text-slate-300">|</span><span>{v.feature}</span></>}
-                                                                {v.tire && <><span className="text-slate-300">|</span><span>{v.tire}</span></>}
-                                                                {v.seats && <><span className="text-slate-300">|</span><span>{v.seats} 座</span></>}
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        {/* Status Badges (Stacked) */}
-                                                        <div className="flex flex-col items-end gap-1">
-                                                            {isMaintenance && (
-                                                                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 font-bold border border-gray-300 shadow-sm flex items-center gap-1">
-                                                                    <AlertTriangle size={12}/> 維修中
-                                                                </span>
-                                                            )}
-                                                            {(!isRentedNow && !isMaintenance) && (
-                                                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-bold border border-green-200 shadow-sm">🟢 目前空閒</span>
-                                                            )}
-                                                            {isRentedNow && (
-                                                                <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 font-bold animate-pulse flex items-center gap-1 shadow-sm border border-red-200">
-                                                                    <Clock size={12}/> 出租中
-                                                                </span>
-                                                            )}
-                                                            {/* 若該車今天(相對過濾時間)有排程，給予警示 */}
-                                                            {v.futureOrders.length > 0 && (
-                                                                <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700 font-bold flex items-center gap-1 shadow-sm border border-yellow-200">
-                                                                    <AlertCircle size={12}/> 本日有預約
-                                                                </span>
-                                                            )}
-                                                            <div className="mt-1 text-gray-400 bg-slate-50 rounded-full p-0.5">
-                                                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                                {v.feature && <span>· {v.feature}</span>}
+                                                                {v.etc && <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-indigo-100 font-mono"><CreditCard size={10}/> ETC: {v.etc}</span>}
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Key Time Reminder (Always Visible) */}
-                                                    {!isExpanded && (
-                                                        <div className="mt-2 pt-2 border-t border-dashed border-gray-200">
-                                                            {isMaintenance ? (
-                                                                <div className="flex items-center gap-2 text-sm bg-gray-50 p-1.5 rounded border border-gray-200">
-                                                                    <span className="px-1.5 py-0.5 rounded bg-gray-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">暫停服務</span>
-                                                                    <span className="font-medium text-gray-600 text-xs">車輛維修/保養中，無法派單</span>
-                                                                </div>
-                                                            ) : activeOrder ? (
-                                                                <div className="flex items-center gap-2 text-sm bg-red-50 p-1.5 rounded">
-                                                                    <span className="px-1.5 py-0.5 rounded bg-red-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">還車</span>
-                                                                    <span className="font-bold text-red-900">{formatDateTime(activeOrder.end)}</span>
-                                                                    <span className="text-[10px] text-slate-600 bg-white px-1 rounded flex items-center border border-red-100">
-                                                                        <MapPin size={10} className="mr-0.5 text-red-400"/> {activeOrder.returnLocation || '未指定'}
-                                                                    </span>
-                                                                    <span className="text-red-700 font-medium text-xs ml-auto truncate">({activeOrder.customer})</span>
-                                                                </div>
-                                                            ) : v.absoluteNextOrder ? (
-                                                                <div className="flex items-center gap-2 text-sm bg-green-50 p-1.5 rounded border border-green-100">
-                                                                    <span className="px-1.5 py-0.5 rounded bg-green-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">可空閒至</span>
-                                                                    <span className="font-bold text-green-900">{formatDateTime(v.absoluteNextOrder.start)}</span>
-                                                                    <span className="text-[10px] text-slate-600 bg-white px-1 rounded flex items-center border border-green-200 truncate">
-                                                                        <MapPin size={10} className="mr-0.5 text-green-600"/> 下單: {v.absoluteNextOrder.pickupLocation || '未指定'}
-                                                                    </span>
-                                                                    <span className="text-green-800 font-medium text-xs ml-auto truncate">({v.absoluteNextOrder.customer})</span>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex items-center gap-2 text-sm bg-slate-50 p-1.5 rounded border border-slate-200">
-                                                                    <span className="px-1.5 py-0.5 rounded bg-slate-500 text-white text-xs font-bold whitespace-nowrap shadow-sm">目前空閒</span>
-                                                                    <span className="font-medium text-slate-500 text-xs">無任何後續排程，可隨時派單</span>
-                                                                </div>
-                                                            )}
+                                                    <div className="flex-1 w-full sm:w-auto flex justify-end items-center gap-3">
+                                                        {!isExpanded && (
+                                                            <div className="text-right text-sm">
+                                                                {isMaintenance ? (
+                                                                    <span className="text-rose-600 font-bold text-xs bg-rose-50 px-2 py-1 rounded-md">車廠保養中</span>
+                                                                ) : activeOrder ? (
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="text-xs text-slate-400">還車期限</span>
+                                                                        <span className="font-bold text-blue-700">{formatDateTime(activeOrder.end)} <span className="text-[10px] text-slate-500 bg-slate-100 px-1 rounded">@{activeOrder.returnLocation}</span></span>
+                                                                    </div>
+                                                                ) : absoluteNextOrder ? (
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="text-xs text-slate-400">可空閒至</span>
+                                                                        <span className="font-bold text-amber-600">{formatDateTime(absoluteNextOrder.start)} <span className="text-[10px] text-slate-500 bg-slate-100 px-1 rounded">@{absoluteNextOrder.pickupLocation}</span></span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded-md">無後續排程</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <div className="bg-slate-50 p-1.5 rounded-full text-slate-400 border border-slate-100">
+                                                            {isExpanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
                                                         </div>
-                                                    )}
+                                                    </div>
                                                 </div>
 
-                                                {/* Expanded Details - Schedule List */}
                                                 {isExpanded && (
-                                                    <div className="px-4 pb-4 border-t bg-slate-50 rounded-b" onClick={(e) => e.stopPropagation()}>
-                                                        <div className="space-y-3 pt-3">
-                                                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1"><Calendar size={12}/> 詳細行程表 (含未來預約)</div>
-                                                            
-                                                            {scheduleOrders.map((order, idx) => {
-                                                                const active = isOrderActiveAtTime(order, filterDateTime);
-                                                                const isFuture = new Date(order.start) > new Date(filterDateTime);
-                                                                
-                                                                let statusColor = "bg-white border-gray-200";
-                                                                let textColor = "text-gray-600";
-                                                                let label = "已結束";
-                                                                let labelClass = "bg-gray-100 text-gray-500 border-gray-200";
-                                                                
-                                                                if (active) {
-                                                                    statusColor = "bg-red-50 border-red-200 shadow-sm";
-                                                                    textColor = "text-red-800";
-                                                                    label = "進行中";
-                                                                    labelClass = "bg-red-100 text-red-700 font-bold border-red-200";
-                                                                } else if (isFuture) {
-                                                                    statusColor = "bg-yellow-50 border-yellow-200 shadow-sm";
-                                                                    textColor = "text-yellow-800";
-                                                                    label = "預約";
-                                                                    labelClass = "bg-yellow-100 text-yellow-700 font-bold border-yellow-200";
-                                                                }
-
-                                                                return (
-                                                                    <div key={order.id} className={`text-sm p-3 rounded-lg border flex flex-col items-start transition-colors ${statusColor}`}>
-                                                                        <div className="flex justify-between items-center w-full mb-1.5 border-b border-black/5 pb-1">
-                                                                            <div className={`font-bold flex items-center gap-2 ${textColor} text-base`}>
-                                                                                {order.customer}
-                                                                            </div>
-                                                                            <span className={`text-[10px] px-2 py-0.5 rounded border ${labelClass}`}>
-                                                                                {label}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="text-sm text-slate-700 mt-2 space-y-1.5 w-full">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-green-700 bg-green-100 font-bold text-[10px] px-1.5 py-0.5 rounded w-9 text-center">取車</span>
-                                                                                <span className="font-medium">{formatDateTime(order.start)}</span>
-                                                                                <span className="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm ml-auto">@{order.pickupLocation || '未指定'}</span>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-red-600 font-bold text-[10px] bg-red-100 px-1.5 py-0.5 rounded w-9 text-center">還車</span>
-                                                                                <span className="font-medium">{formatDateTime(order.end)}</span>
-                                                                                <span className="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm ml-auto">@{order.returnLocation || '未指定'}</span>
-                                                                            </div>
-                                                                            {/* 備註顯示 */}
-                                                                            {order.note && (
-                                                                                <div className="text-xs text-gray-600 mt-2 bg-yellow-50/80 p-2 rounded border border-yellow-100/50 leading-relaxed">
-                                                                                    <span className="font-bold text-gray-700">備註：</span>{order.note}
+                                                    <div className="px-4 pb-4 bg-slate-50/50 border-t border-slate-100" onClick={e=>e.stopPropagation()}>
+                                                        <div className="pt-4 space-y-3">
+                                                            {v.dayOrders.length === 0 ? (
+                                                                <div className="text-center py-4 text-xs font-medium text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">此時間點後尚無排程</div>
+                                                            ) : (
+                                                                v.dayOrders.map(o => {
+                                                                    const isActive = isOrderActiveAtTime(o, filterDateTime);
+                                                                    return (
+                                                                        <div key={o.id} className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isActive ? 'bg-white border-blue-200 shadow-sm ring-1 ring-blue-50' : 'bg-white border-slate-200 opacity-80 hover:opacity-100'}`}>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-2 mb-1">
+                                                                                    <span className="font-bold text-slate-800 text-base">{o.customer}</span>
+                                                                                    {isActive && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">進行中</span>}
                                                                                 </div>
-                                                                            )}
+                                                                                <div className="text-xs text-slate-600 space-y-1">
+                                                                                    <div className="flex gap-2"><span className="text-slate-400 w-6 font-bold">取</span> <span className="font-mono">{formatDateTime(o.start)}</span> <span className="bg-slate-50 px-1 rounded text-slate-500">@{o.pickupLocation}</span></div>
+                                                                                    <div className="flex gap-2"><span className="text-slate-400 w-6 font-bold">還</span> <span className="font-mono text-blue-600 font-bold">{formatDateTime(o.end)}</span> <span className="bg-slate-50 px-1 rounded text-slate-500">@{o.returnLocation}</span></div>
+                                                                                </div>
+                                                                                {o.note && <div className="mt-2 text-xs text-amber-700 bg-amber-50 p-1.5 rounded-md border border-amber-100/50">備註: {o.note}</div>}
+                                                                                
+                                                                                {isMaintenance && new Date(o.end) > getJSTNominalDate() && (
+                                                                                    <div className="mt-2 text-xs bg-rose-50 p-2 rounded-md border border-rose-200 flex items-center justify-between">
+                                                                                        <span className="text-rose-700 font-bold flex items-center gap-1"><AlertTriangle size={12}/> 此車維修中，需更換車輛</span>
+                                                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-2 py-1 rounded hover:bg-rose-700 font-bold">重新指派</button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                             
-                                                                            {/* 在車輛詳細行程中，若這台車已維修且此訂單還沒結束，提醒需換車 */}
-                                                                            {isMaintenance && new Date(order.end) > getJSTNominalDate() && (
-                                                                                <div className="mt-2 text-xs bg-red-50 p-2 rounded border border-red-200 flex items-center justify-between">
-                                                                                    <span className="text-red-700 font-bold flex items-center gap-1"><AlertTriangle size={12}/> 此車維修中，需更換車輛</span>
-                                                                                    <button onClick={() => handleEditOrder(order)} className="bg-red-600 text-white px-2 py-1 rounded shadow-sm hover:bg-red-700">重新指派</button>
-                                                                                </div>
-                                                                            )}
+                                                                            <div className="flex gap-2 justify-end sm:flex-col mt-2 sm:mt-0">
+                                                                                <button onClick={() => handleEditOrder(o)} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">編輯</button>
+                                                                                {isActive && (
+                                                                                    <button onClick={() => handleQuickReturn(o)} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm">
+                                                                                        <Zap size={12}/> 提早歸還
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-
+                                                                    )
+                                                                })
+                                                            )}
+                                                            
                                                             {!isMaintenance && (
                                                                 <button onClick={()=>{
                                                                     setEditingOrder(null);
-                                                                    let defaultStart = filterDateTime;
-                                                                    if (v.dayOrders && v.dayOrders.length > 0) {
-                                                                        const lastEnd = new Date(v.dayOrders[v.dayOrders.length-1].end);
-                                                                        lastEnd.setHours(lastEnd.getHours() + 1);
-                                                                        defaultStart = getJSTString(lastEnd);
-                                                                    }
+                                                                    let s = getNextHourJSTString();
+                                                                    let e = new Date(s); e.setDate(e.getDate()+1);
                                                                     setOrderFormData({
-                                                                        customer:'', 
-                                                                        start: defaultStart, 
-                                                                        end: '',
-                                                                        vehicleId: v.id, 
-                                                                        note:'', 
-                                                                        status:'confirmed',
-                                                                        pickupLocation: '成田二航',
-                                                                        returnLocation: '成田二航'
+                                                                        customer:'', start: s, end: getJSTString(e), vehicleId: v.id, note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'
                                                                     });
                                                                     setIsOrderModalOpen(true);
-                                                                }} className="mt-4 w-full py-2.5 text-sm font-bold border-2 border-dashed border-blue-300 text-blue-600 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-400 flex items-center justify-center gap-2 transition-all shadow-sm">
-                                                                    <Plus size={16}/> 新增派單
+                                                                }} className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-600 bg-white hover:bg-blue-50 hover:border-blue-400 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                                                                    <Plus size={16}/> 指派新訂單給 {v.plate}
                                                                 </button>
                                                             )}
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
-                                        )
+                                        );
                                     })}
                                 </div>
                             </div>
@@ -899,427 +653,321 @@
 
                         {activeTab === 'vehicles' && (
                             <div className="space-y-4">
-                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setIsVehicleModalOpen(true)}} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow font-bold flex justify-center items-center gap-2 transition-colors"><Plus/> 新增車輛</button>
-                                {vehicles.map(v => (
-                                    <div key={v.id} className={`bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center hover:shadow-md transition-shadow ${v.status === 'maintenance' ? 'border-red-300 bg-red-50/40' : 'border-slate-100'}`}>
-                                        <div>
-                                            <div className="font-bold">
-                                                {v.plate} 
-                                                <span className="text-xs text-gray-500 ml-1">({v.location})</span>
-                                                {v.status === 'maintenance' && <span className="ml-2 text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded border border-red-200 font-bold">維修中</span>}
+                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-md font-bold flex justify-center items-center gap-2"><Plus/> 新增車隊車輛</button>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {vehicles.map(v => (
+                                        <div key={v.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:border-slate-300 transition-colors">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <div className="font-black text-lg text-slate-800 tracking-wide">{v.plate} <span className="text-[10px] font-normal text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded ml-1">{v.location}</span></div>
+                                                    <div className="text-sm text-slate-500 font-medium mt-1">{v.model} {v.feature && `· ${v.feature}`}</div>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                    <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg"><Edit3 size={16}/></button>
+                                                    <button onClick={()=>handleDeleteItem('vehicles', v.id)} className="p-2 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-lg"><Trash2 size={16}/></button>
+                                                </div>
                                             </div>
-                                            <div className="text-sm text-gray-500">
-                                                {v.model} 
-                                                {v.feature ? ` / ${v.feature}` : ''}
-                                                {v.tire ? ` (${v.tire})` : ''}
-                                                {v.seats ? ` / ${v.seats} 座` : ''}
+                                            <div className="flex gap-2 text-[10px] font-bold flex-wrap items-center">
+                                                <span className={`px-2 py-1 rounded-md ${v.status === 'maintenance' ? 'bg-rose-100 text-rose-700' : 'bg-green-100 text-green-700'}`}>{v.status === 'maintenance' ? '🔧 維修中' : '✅ 營運中'}</span>
+                                                <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200">💺 {v.seats}座</span>
+                                                {v.tire && <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200">{v.tire === '冬済' ? '❄️ 冬胎' : '☀️ 夏胎'}</span>}
+                                                {v.etc && <span className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-200 flex items-center gap-1 font-mono"><CreditCard size={10}/> ETC: {v.etc}</span>}
                                             </div>
-                                            <div className="text-xs bg-gray-100 inline-block px-1 rounded mt-1">ETC: {v.etc||'無'}</div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setIsVehicleModalOpen(true)}} className="p-2 text-gray-400 hover:text-blue-600"><Edit3 size={18}/></button>
-                                            <button onClick={()=>handleDeleteVehicle(v.id)} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={18}/></button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
                         )}
 
                         {activeTab === 'orders' && (
                             <div className="space-y-4">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                    <h2 className="font-bold text-lg text-slate-800">目前/預約中訂單</h2>
-                                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                                        <div className="relative flex-1">
-                                            <Search className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
-                                            <input 
-                                                type="text" 
-                                                placeholder="搜尋客戶或車牌..." 
-                                                className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none"
-                                                value={searchTerm}
-                                                onChange={e => setSearchTerm(e.target.value)}
-                                            />
-                                        </div>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                                        <input type="text" placeholder="搜尋客戶姓名或車牌..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
                                     </div>
+                                    <button onClick={()=>{
+                                        setEditingOrder(null);
+                                        let s = getNextHourJSTString();
+                                        let e = new Date(s); e.setDate(e.getDate()+1);
+                                        setOrderFormData({customer:'', start: s, end: getJSTString(e), vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); 
+                                        setIsOrderModalOpen(true);
+                                    }} className="px-4 bg-slate-900 text-white rounded-xl shadow-sm font-bold flex items-center gap-1 hover:bg-slate-800"><Plus size={18}/><span className="hidden sm:inline">新增</span></button>
                                 </div>
 
-                                <button onClick={()=>{setEditingOrder(null); setOrderFormData({customer:'', start: getJSTString(getJSTNominalDate()), end:'', vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); setIsOrderModalOpen(true)}} className="w-full py-3 bg-blue-600 text-white rounded shadow font-bold flex justify-center gap-2"><Plus/> 新增訂單</button>
-                                
-                                {activeOrders.length === 0 ? (
-                                    <div className="text-center py-8 text-slate-500 bg-white rounded-lg border border-slate-100">沒有進行中或預約的訂單</div>
-                                ) : (
-                                    activeOrders
-                                    .filter(o => {
-                                        if (!searchTerm) return true;
+                                <div className="space-y-3">
+                                    {activeOrders.length === 0 ? <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-dashed border-slate-200">無進行中訂單</div> : activeOrders.filter(o => !searchTerm || o.customer.includes(searchTerm) || vehicles.find(v=>v.id===o.vehicleId)?.plate.includes(searchTerm)).sort((a,b)=>new Date(a.start)-new Date(b.start)).map(o => {
                                         const v = vehicles.find(x=>x.id===o.vehicleId);
-                                        const searchLower = searchTerm.toLowerCase();
-                                        return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
-                                    })
-                                    .sort((a,b)=>new Date(a.start)-new Date(b.start))
-                                    .map(o => {
-                                        const v = vehicles.find(x=>x.id===o.vehicleId);
-                                        const isActiveNow = isOrderActiveAtTime(o, getJSTString(getJSTNominalDate()));
-                                        
+                                        const isActive = isOrderActiveAtTime(o, getJSTString(getJSTNominalDate()));
                                         return (
-                                            <div key={o.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${isActiveNow ? 'border-l-red-500' : 'border-l-yellow-400'}`}>
-                                                <div className="flex justify-between mb-1">
-                                                    <span className="font-bold text-lg text-slate-800">{o.customer}</span>
-                                                    <span className={`text-xs px-2 py-1 rounded font-bold ${isActiveNow ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                        {isActiveNow ? '進行中' : '已預約'}
-                                                    </span>
-                                                </div>
-                                                <div className={`text-sm mb-2 font-medium ${v?.status === 'maintenance' ? 'text-red-500 line-through' : 'text-gray-800'}`}>
-                                                    {v?.plate || '車輛已刪除'}
+                                            <div key={o.id} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isActive ? 'border-l-blue-500' : 'border-l-amber-400'} border-y border-r border-slate-100`}>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                                            {o.customer} 
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{isActive ? '進行中' : '預約中'}</span>
+                                                        </div>
+                                                        <div className={`text-xs font-bold mt-1 flex flex-wrap items-center gap-2 ${v?.status === 'maintenance' ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                            <span>{v ? `${v.plate} (${v.model})` : '車輛未分配'}</span>
+                                                            {v?.etc && <span className="text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100 font-mono"><CreditCard size={10}/> {v.etc}</span>}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        {isActive && <button onClick={()=>handleQuickReturn(o)} className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"><Zap size={14}/> 提早還車</button>}
+                                                        <button onClick={() => handleEditOrder(o)} className="text-slate-400 hover:text-slate-700 p-1.5 bg-slate-50 rounded-lg"><Edit3 size={16}/></button>
+                                                    </div>
                                                 </div>
                                                 
-                                                {/* 訂單防呆：如果車子進廠維修，要求重新指派 */}
                                                 {v?.status === 'maintenance' && (
-                                                    <div className="text-xs text-red-700 font-bold bg-red-50 p-2 rounded-lg border border-red-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
-                                                        <div className="flex items-center gap-1"><AlertTriangle size={14} /> 原車維修中，請重新指派！</div>
-                                                        <button onClick={() => handleEditOrder(o)} className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors">重新指派</button>
+                                                    <div className="text-xs text-rose-700 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
+                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 原車已進廠維修，請重新指派！</div>
+                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors shadow-sm">更換車輛</button>
                                                     </div>
                                                 )}
 
-                                                <div className="text-sm text-slate-700 mb-2 space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-green-700 bg-green-100 font-bold text-[10px] px-1.5 py-0.5 rounded w-9 text-center">取車</span>
-                                                        <span className="font-medium">{formatDateTime(o.start)}</span>
-                                                        <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">@{o.pickupLocation}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-red-700 bg-red-100 font-bold text-[10px] px-1.5 py-0.5 rounded w-9 text-center">還車</span>
-                                                        <span className="font-medium">{formatDateTime(o.end)}</span>
-                                                        <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">@{o.returnLocation}</span>
-                                                    </div>
-                                                </div>
-                                                {o.note && (
-                                                    <div className="text-xs text-gray-600 mb-3 bg-yellow-50/50 p-2 rounded border border-yellow-100">
-                                                        <span className="font-bold text-gray-700">備註：</span>{o.note}
-                                                    </div>
-                                                )}
-                                                <div className="flex justify-end gap-3 border-t pt-2 mt-2">
-                                                    <button onClick={() => handleEditOrder(o)} className="text-sm text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors">編輯</button>
-                                                    <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors">刪除</button>
+                                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 mt-3 pt-3 border-t border-slate-50 text-sm">
+                                                    <div className="flex flex-col"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">取車 Pickup</span><span className="font-mono text-slate-700">{formatDateTime(o.start)} <span className="text-xs bg-slate-100 px-1 rounded ml-1">@{o.pickupLocation}</span></span></div>
+                                                    <div className="hidden sm:block text-slate-300 mt-3"><ArrowRight size={16}/></div>
+                                                    <div className="flex flex-col"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">還車 Return</span><span className="font-mono text-slate-700">{formatDateTime(o.end)} <span className="text-xs bg-slate-100 px-1 rounded ml-1">@{o.returnLocation}</span></span></div>
                                                 </div>
                                             </div>
                                         )
-                                    })
-                                )}
+                                    })}
+                                </div>
                             </div>
                         )}
 
                         {activeTab === 'history' && (
                             <div className="space-y-4">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded shadow-sm border border-slate-100">
-                                    <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                        <History size={18} className="text-gray-500" /> 歷史訂單紀錄
-                                    </h2>
-                                    <div className="relative w-full sm:w-64">
-                                        <Search className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
-                                        <input 
-                                            type="text" 
-                                            placeholder="搜尋客戶或車牌..." 
-                                            className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-200 outline-none"
-                                            value={historySearchTerm}
-                                            onChange={e => setHistorySearchTerm(e.target.value)}
-                                        />
-                                    </div>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                                    <input type="text" placeholder="搜尋歷史紀錄..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 outline-none shadow-sm" value={historySearchTerm} onChange={e => setHistorySearchTerm(e.target.value)}/>
                                 </div>
-
-                                <div className="text-xs text-gray-500 px-2 flex items-center gap-1">
-                                    <AlertCircle size={12} /> 系統自動將「還車時間早於當下」或「手動取消」的訂單歸檔於此
-                                </div>
-
-                                {historyOrders.length === 0 ? (
-                                    <div className="text-center py-10 text-slate-400">尚無歷史訂單紀錄</div>
-                                ) : (
-                                    historyOrders
-                                    .filter(o => {
-                                        if (!historySearchTerm) return true;
-                                        const v = vehicles.find(x=>x.id===o.vehicleId);
-                                        const searchLower = historySearchTerm.toLowerCase();
-                                        return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
-                                    })
-                                    .sort((a,b)=>new Date(b.end)-new Date(a.end)) // 歷史訂單通常以結束時間越晚(越近期)的排越上面
-                                    .map(o => {
-                                        const v = vehicles.find(x=>x.id===o.vehicleId);
-                                        return (
-                                            <div key={o.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 opacity-80 hover:opacity-100 transition-opacity">
-                                                <div className="flex justify-between mb-1">
-                                                    <span className="font-bold text-slate-700">{o.customer}</span>
-                                                    <span className="text-xs px-2 py-1 rounded font-bold bg-gray-200 text-gray-600">
-                                                        {o.status === 'cancelled' ? '已取消' : '已結束'}
-                                                    </span>
-                                                </div>
-                                                <div className="text-sm text-gray-600 mb-2 font-medium">
-                                                    {v?.plate || '車輛已刪除'}
-                                                </div>
-                                                <div className="text-xs text-slate-500 mb-2 space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-8 text-slate-400">取車:</span>
-                                                        <span>{formatDateTime(o.start)}</span>
-                                                        <span className="ml-auto">@{o.pickupLocation}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-8 text-slate-400">還車:</span>
-                                                        <span>{formatDateTime(o.end)}</span>
-                                                        <span className="ml-auto">@{o.returnLocation}</span>
-                                                    </div>
-                                                </div>
-                                                {o.note && (
-                                                    <div className="text-xs text-gray-500 mb-2 p-2 bg-white rounded border border-slate-200">
-                                                        備註：{o.note}
-                                                    </div>
-                                                )}
-                                                <div className="flex justify-end gap-3 border-t border-slate-200 pt-2 mt-2">
-                                                    <button onClick={() => handleEditOrder(o)} className="text-xs text-blue-600 hover:underline">檢視/編輯</button>
-                                                    <button onClick={()=>handleDeleteOrder(o.id)} className="text-xs text-red-500 hover:underline">刪除紀錄</button>
-                                                </div>
+                                <div className="space-y-2">
+                                    {historyOrders.filter(o => !historySearchTerm || o.customer.includes(historySearchTerm)).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
+                                        <div key={o.id} className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
+                                            <div>
+                                                <div className="font-bold text-slate-700 text-sm">{o.customer} <span className="text-[10px] font-normal text-slate-500 ml-1">{vehicles.find(v=>v.id===o.vehicleId)?.plate || '已刪除車輛'}</span></div>
+                                                <div className="text-xs text-slate-500 font-mono mt-0.5">{formatDateTime(o.start)} - {formatDateTime(o.end)}</div>
                                             </div>
-                                        )
-                                    })
-                                )}
+                                            <div className="flex items-center gap-3">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${o.status === 'cancelled' ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{o.status === 'cancelled' ? '已取消' : '已完成'}</span>
+                                                <button onClick={()=>handleDeleteItem('orders', o.id)} className="text-slate-400 hover:text-rose-600"><Trash2 size={14}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </main>
 
-                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-3 z-20 text-[10px] sm:text-xs">
-                        <button onClick={()=>setActiveTab('dashboard')} className={`flex flex-col items-center ${activeTab==='dashboard'?'text-blue-600':'text-gray-400'}`}><Calendar size={20}/><span>看板</span></button>
-                        <button onClick={()=>setActiveTab('vehicles')} className={`flex flex-col items-center ${activeTab==='vehicles'?'text-blue-600':'text-gray-400'}`}><Car size={20}/><span>車輛</span></button>
-                        <button onClick={()=>setActiveTab('orders')} className={`flex flex-col items-center ${activeTab==='orders'?'text-blue-600':'text-gray-400'}`}><Users size={20}/><span>當前訂單</span></button>
-                        <button onClick={()=>setActiveTab('history')} className={`flex flex-col items-center ${activeTab==='history'?'text-blue-600':'text-gray-400'}`}><History size={20}/><span>歷史紀錄</span></button>
-                        <button onClick={()=>setActiveTab('history')} className={`flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-all ${activeTab==='history'?'text-brand-600 bg-brand-50 font-bold':'text-slate-400 hover:bg-slate-50 font-medium'}`}>
-                            <History size={20} className="mb-1" strokeWidth={activeTab==='history'?2.5:2}/><span>歷史</span>
-                        </button>
+                    {/* 底部導覽列 */}
+                    <div className="fixed bottom-0 left-0 right-0 glass-nav flex justify-around p-2 pb-safe z-30 sm:hidden">
+                        {[ { id: 'dashboard', icon: Activity, label: '看板' }, { id: 'vehicles', icon: Car, label: '車隊' }, { id: 'orders', icon: Calendar, label: '任務' }, { id: 'history', icon: History, label: '紀錄' } ].map(tab => (
+                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex flex-col items-center justify-center w-16 h-12 rounded-xl transition-all duration-200 ${activeTab === tab.id ? 'text-blue-600 font-bold scale-110' : 'text-slate-400 font-medium hover:bg-slate-100/50'}`}>
+                                <tab.icon size={20} className="mb-0.5" strokeWidth={activeTab === tab.id ? 2.5 : 2}/>
+                                <span className="text-[10px]">{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* 桌面版導覽列 */}
+                    <div className="hidden sm:flex fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-300 rounded-full px-4 py-2 shadow-2xl z-30 gap-2 items-center border border-slate-700">
+                        {[ { id: 'dashboard', icon: Activity, label: '營運看板' }, { id: 'vehicles', icon: Car, label: '車隊管理' }, { id: 'orders', icon: Calendar, label: '派單任務' }, { id: 'history', icon: History, label: '歷史歸檔' } ].map(tab => (
+                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 text-sm ${activeTab === tab.id ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/30' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
+                                <tab.icon size={16} strokeWidth={activeTab === tab.id ? 2.5 : 2}/>
+                                <span>{tab.label}</span>
+                            </button>
+                        ))}
                     </div>
 
-                    {/* 彈出視窗：訂單 */}
-                    {isOrderModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
-                            <div className="bg-white w-full max-w-lg sm:rounded-2xl rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
-                                <div className="p-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white sm:rounded-t-2xl rounded-t-3xl z-10">
-                                    <h3 className="font-bold text-xl text-slate-800 tracking-tight">{editingOrder?'編輯訂單細節':'建立新任務'}</h3>
-                                    <button onClick={()=>setIsOrderModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-colors"><X size={20} className="text-slate-600"/></button>
+                    {/* 🔥 新增：人員排休分析 Modal */}
+                    {isVacationModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
+                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50/50 rounded-t-3xl sm:rounded-t-2xl">
+                                    <h3 className="font-black text-lg text-emerald-800 flex items-center gap-2"><Sun className="text-emerald-500"/> 人員可全日休假日期</h3>
+                                    <button onClick={()=>setIsVacationModalOpen(false)} className="bg-white hover:bg-emerald-100 rounded-full p-2 text-emerald-600 shadow-sm"><X size={18}/></button>
                                 </div>
-                                <form onSubmit={handleSaveOrder} className="p-5 overflow-y-auto space-y-5 bg-slate-50/50">
+                                <div className="p-6 overflow-y-auto bg-slate-50/50">
+                                    {!freeDaysData.hasFutureEvents ? (
+                                        <div className="text-center py-8">
+                                            <div className="w-16 h-16 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4"><Sun size={32}/></div>
+                                            <div className="text-emerald-700 font-bold text-lg mb-1">近期無任何排程</div>
+                                            <div className="text-slate-500 text-sm">隨時都可以安排人員休假！</div>
+                                        </div>
+                                    ) : freeDaysData.list.length === 0 ? (
+                                        <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
+                                            <div className="text-slate-400 font-medium mb-1">無法安排全日休假</div>
+                                            <div className="text-slate-500 text-xs px-4">直至最後一筆行程前，每日皆需前往交/還車。</div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="text-xs text-slate-500 flex items-center gap-1.5 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                                                <Navigation size={14} className="text-emerald-500"/>
+                                                系統已幫您過濾掉需要「交車」或「還車」的日期。
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3">
+                                                {freeDaysData.list.map((group, i) => {
+                                                    const start = group[0], end = group[group.length - 1];
+                                                    const isSingle = start.getTime() === end.getTime();
+                                                    return (
+                                                        <div key={i} className="bg-white border border-emerald-200 p-4 rounded-xl shadow-sm flex items-center justify-between border-l-4 border-l-emerald-500">
+                                                            <div className="font-bold text-slate-700">
+                                                                {isSingle ? formatDateOnly(start) : `${formatDateOnly(start)} ~ ${formatShortDateWithDay(end)}`}
+                                                            </div>
+                                                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">可排休</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-slate-100 bg-white sm:rounded-b-2xl">
+                                    <button onClick={()=>setIsVacationModalOpen(false)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-lg">了解，關閉視窗</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 訂單 Modal */}
+                    {isOrderModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
+                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                                    <h3 className="font-black text-xl text-slate-800">{editingOrder ? '編輯派車任務' : '新建派車任務'}</h3>
+                                    <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2"><X size={18}/></button>
+                                </div>
+                                <form onSubmit={handleSaveOrder} className="p-6 overflow-y-auto space-y-5">
+                                    
                                     {isOriginalMaintenance && !orderFormData.vehicleId && (
                                         <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-200 text-sm flex items-start gap-2 shadow-sm animate-pulse">
                                             <AlertTriangle size={18} className="flex-shrink-0 mt-0.5"/>
-                                            <div className="leading-relaxed">原指派車輛 <span className="font-bold bg-white px-1 rounded mx-1 shadow-sm">({originalVehicle.plate})</span> 目前維修中，請重新指派其他可用車輛。</div>
+                                            <div className="leading-relaxed font-bold">原指派車輛 <span className="bg-white px-1.5 py-0.5 rounded shadow-sm mx-1 text-rose-900">{originalVehicle.plate}</span> 已進廠維修，請從下方重新指派其他可用車輛！</div>
                                         </div>
                                     )}
 
                                     <div>
-                                        <label className="text-xs font-bold text-slate-600 block mb-1">客戶姓名 <span className="text-red-500">*</span></label>
-                                        <input placeholder="輸入客戶姓名或代號" className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-200 outline-none transition-all" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">客戶名稱 *</label>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-xs font-bold text-green-700 block mb-1">取車時間 <span className="text-red-500">*</span></label>
-                                            <input type="datetime-local" className="w-full border border-slate-300 p-2 rounded-md text-sm focus:ring-2 focus:ring-green-200 outline-none transition-all bg-white" value={orderFormData.start} onChange={e=>setOrderFormData({...orderFormData, start:e.target.value})} required/>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車時間 *</label>
+                                            <input type="datetime-local" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono" value={orderFormData.start} onChange={e=>setOrderFormData({...orderFormData, start:e.target.value})} required/>
                                         </div>
                                         <div>
-                                            <label className="text-xs font-bold text-red-700 block mb-1">還車時間 <span className="text-red-500">*</span></label>
-                                            <input type="datetime-local" className="w-full border border-slate-300 p-2 rounded-md text-sm focus:ring-2 focus:ring-red-200 outline-none transition-all bg-white" value={orderFormData.end} onChange={e=>setOrderFormData({...orderFormData, end:e.target.value})} required/>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車時間 *</label>
+                                            <input type="datetime-local" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono" value={orderFormData.end} onChange={e=>setOrderFormData({...orderFormData, end:e.target.value})} required/>
                                         </div>
                                     </div>
 
-                                    {/* 地點選擇 */}
-                                    <datalist id="location-options">
-                                        {PRESET_LOCATIONS.map(loc => <option key={loc} value={loc} />)}
-                                    </datalist>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <datalist id="locations">{PRESET_LOCATIONS.map(l => <option key={l} value={l} />)}</datalist>
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-xs font-bold text-slate-600 block mb-1">交車地點</label>
-                                            <input 
-                                                list="location-options"
-                                                className="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none transition-all" 
-                                                placeholder="選擇或輸入"
-                                                value={orderFormData.pickupLocation} 
-                                                onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} 
-                                            />
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車地</label>
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
                                         </div>
                                         <div>
-                                            <label className="text-xs font-bold text-slate-600 block mb-1">還車地點</label>
-                                            <input 
-                                                list="location-options"
-                                                className="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none transition-all" 
-                                                placeholder="選擇或輸入"
-                                                value={orderFormData.returnLocation} 
-                                                onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} 
-                                            />
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車地</label>
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
                                         </div>
                                     </div>
                                     
                                     <div>
-                                        <label className="text-xs font-bold text-slate-600 block mb-1">訂單狀態</label>
-                                        <select 
-                                            className="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                                            value={orderFormData.status} 
-                                            onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}
-                                        >
-                                            <option value="confirmed">正常 (依時間自動判斷狀態)</option>
-                                            <option value="cancelled">已取消 (退單/未出席)</option>
-                                        </select>
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">備註事項 (選填)</label>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})} />
                                     </div>
 
-                                    {/* 備註欄位 */}
                                     <div>
-                                        <label className="text-xs font-bold text-slate-600 block mb-1">備註事項 (選填)</label>
-                                        <textarea 
-                                            className="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none transition-all" 
-                                            rows="2"
-                                            placeholder="航班號碼、嬰兒座椅等特殊需求..."
-                                            value={orderFormData.note} 
-                                            onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})} 
-                                        ></textarea>
-                                    </div>
-
-                                    <div className="pt-2">
-                                        <label className="text-xs font-bold text-slate-600 block mb-2">指派車輛 <span className="text-red-500">*</span></label>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                                            {vehicles.map(v=>{
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-2">指派車輛 *</label>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                            {vehicles.map(v => {
                                                 const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
-                                                // 修正：移除 Number() 轉型，因為 Firestore ID 是字串
-                                                const isSelected = orderFormData.vehicleId === v.id;
+                                                const selected = orderFormData.vehicleId === v.id;
                                                 return (
-                                                    <label 
-                                                        key={v.id} 
-                                                        className={`
-                                                            relative flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all
-                                                            ${isSelected ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 hover:bg-slate-50'}
-                                                            ${!available ? 'opacity-40 bg-slate-100 cursor-not-allowed grayscale-[50%]' : ''}
-                                                        `}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            {/* 選取狀態：改用 CheckCircle 圖示 */}
-                                                            {isSelected ? (
-                                                                <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                                            ) : (
-                                                                <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex-shrink-0" />
-                                                            )}
-                                                            
-                                                            <div className="flex flex-col">
-                                                                <div className={`font-bold text-sm ${isSelected ? 'text-blue-900' : 'text-slate-800'}`}>
-                                                                    {v.plate} 
-                                                                </div>
-                                                                <div className="text-xs text-slate-500 flex flex-wrap gap-1 items-center mt-0.5">
-                                                                    <span className="font-medium text-slate-600">{v.model}</span>
-                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-blue-600">{v.feature}</span></>}
-                                                                    {v.tire && <><span className="text-slate-300">|</span><span>{v.tire}</span></>}
-                                                                    {v.seats && <><span className="text-slate-300">|</span><span>{v.seats}座</span></>}
-                                                                </div>
-                                                            </div>
+                                                    <label key={v.id} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${selected ? 'border-blue-500 bg-blue-50/50' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}>
+                                                        <input type="radio" name="vid" className="hidden" checked={selected} onChange={() => available && setOrderFormData({...orderFormData, vehicleId: v.id})} disabled={!available}/>
+                                                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                                                            {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                                                         </div>
-                                                        
-                                                        {!available && <span className="text-[10px] text-red-600 font-bold px-1.5 py-0.5 bg-red-100 border border-red-200 rounded whitespace-nowrap">
-                                                            {(v.status === 'maintenance' && new Date(orderFormData.end) > getJSTNominalDate()) ? '維修中' : '時段衝突'}
-                                                        </span>}
-                                                        
-                                                        {/* 隱藏的原生 Radio */}
-                                                        <input 
-                                                            type="radio" 
-                                                            name="vid" 
-                                                            className="hidden" 
-                                                            checked={isSelected} 
-                                                            onChange={()=> available && setOrderFormData({...orderFormData, vehicleId:v.id})} 
-                                                            disabled={!available} 
-                                                        />
+                                                        <div className="flex-1">
+                                                            <div className={`font-bold ${selected ? 'text-blue-900' : 'text-slate-700'}`}>{v.plate}</div>
+                                                            <div className="text-[10px] text-slate-500">{v.model} {v.seats}座</div>
+                                                        </div>
+                                                        {!available && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold">{(v.status === 'maintenance' && new Date(orderFormData.end) > getJSTNominalDate()) ? '維修中' : '時間衝突'}</span>}
                                                     </label>
-                                                );
+                                                )
                                             })}
                                         </div>
                                     </div>
                                     
-                                    <div className="flex gap-3 justify-end pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
-                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3.5 border border-slate-300 rounded-xl font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">取消</button>
-                                        <button type="submit" className="flex-1 py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all active:scale-[0.98] shadow-md shadow-brand-200 text-base tracking-wide">儲存訂單</button>
+                                    <div className="flex gap-3 pt-4 border-t border-slate-100">
+                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors">取消</button>
+                                        <button type="submit" className="flex-1 py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20">確認派車</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* 彈出視窗：車輛 */}
+                    {/* 車輛 Modal */}
                     {isVehicleModalOpen && (
-                        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-md sm:rounded-xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-2xl animate-slide-up sm:animate-fade-in">
-                                <div className="p-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl flex justify-between items-center sticky top-0">
-                                    <h3 className="font-bold text-lg text-slate-800">{editingVehicle?'編輯車輛':'新增車輛'}</h3>
-                                    <button onClick={()=>setIsVehicleModalOpen(false)} className="bg-slate-200 hover:bg-slate-300 rounded-full p-1 transition-colors"><X size={18} className="text-slate-600"/></button>
+                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
+                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                                    <h3 className="font-black text-xl text-slate-800">{editingVehicle ? '編輯車輛檔案' : '登錄新車輛'}</h3>
+                                    <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2"><X size={18}/></button>
                                 </div>
-                                <form onSubmit={handleSaveVehicle} className="p-4 overflow-y-auto space-y-4">
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const data = { ...vehicleFormData, updatedAt: serverTimestamp() };
+                                    if (editingVehicle) await updateDoc(doc(db, 'vehicles', editingVehicle.id), data);
+                                    else await addDoc(collection(db, 'vehicles'), { ...data, createdAt: serverTimestamp() });
+                                    setIsVehicleModalOpen(false);
+                                }} className="p-6 overflow-y-auto space-y-4">
                                     <div>
-                                        <label className="text-xs font-bold text-slate-600 block mb-1">車牌號碼 <span className="text-red-500">*</span></label>
-                                        <input placeholder="例: 品川300わ1234" className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-200 outline-none transition-all font-bold text-slate-800" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 *</label>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-600 block mb-1">車型 <span className="text-red-500">*</span></label>
-                                            <input placeholder="例: Alphard" className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-200 outline-none transition-all" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-600 block mb-1">特徵標籤</label>
-                                            <input placeholder="例: HEV 4WD" className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-200 outline-none transition-all" value={vehicleFormData.feature} onChange={e=>setVehicleFormData({...vehicleFormData, feature:e.target.value})} />
-                                        </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車型 *</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/></div>
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">特徵</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={vehicleFormData.feature} onChange={e=>setVehicleFormData({...vehicleFormData, feature:e.target.value})} /></div>
                                     </div>
-                                    <div className="grid grid-cols-[1fr_2fr] gap-3">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">座位</label><input type="number" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} /></div>
                                         <div>
-                                            <label className="text-xs font-bold text-slate-600 block mb-1">座位數</label>
-                                            <div className="relative">
-                                                <input type="number" placeholder="7" className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-200 outline-none transition-all pr-8" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} />
-                                                <span className="absolute right-3 top-3 text-slate-400 text-sm">座</span>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-600 block mb-1">輪胎狀態</label>
-                                            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                                <label className={`flex-1 text-center py-1.5 rounded-md text-sm font-bold cursor-pointer transition-colors ${vehicleFormData.tire === '冬済' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:bg-slate-200'}`}>
-                                                    <input type="radio" name="tire" value="冬済" className="hidden" checked={vehicleFormData.tire === '冬済'} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}/>
-                                                    ❄️ 冬胎
-                                                </label>
-                                                <label className={`flex-1 text-center py-1.5 rounded-md text-sm font-bold cursor-pointer transition-colors ${vehicleFormData.tire === '夏済' ? 'bg-white shadow text-orange-600' : 'text-slate-500 hover:bg-slate-200'}`}>
-                                                    <input type="radio" name="tire" value="夏済" className="hidden" checked={vehicleFormData.tire === '夏済'} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}/>
-                                                    ☀️ 夏胎
-                                                </label>
-                                            </div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">營運狀態</label>
+                                            <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={vehicleFormData.status} onChange={e=>setVehicleFormData({...vehicleFormData, status:e.target.value})}>
+                                                <option value="active">✅ 正常服役</option>
+                                                <option value="maintenance">🔧 維修保養</option>
+                                            </select>
                                         </div>
                                     </div>
                                     
-                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                        <label className="text-xs font-bold text-slate-700 block mb-2">車輛營運狀態</label>
-                                        <div className="flex gap-3">
-                                            <label className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${vehicleFormData.status !== 'maintenance' ? 'bg-green-100 border-green-400 text-green-700 shadow-sm font-bold' : 'bg-white hover:bg-slate-100 text-slate-500'}`}>
-                                                <input type="radio" name="status" value="active" checked={vehicleFormData.status !== 'maintenance'} onChange={e => setVehicleFormData({...vehicleFormData, status: 'active'})} className="hidden"/>
-                                                ✅ 正常服役
-                                            </label>
-                                            <label className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${vehicleFormData.status === 'maintenance' ? 'bg-red-100 border-red-400 text-red-700 shadow-sm font-bold' : 'bg-white hover:bg-slate-100 text-slate-500'}`}>
-                                                <input type="radio" name="status" value="maintenance" checked={vehicleFormData.status === 'maintenance'} onChange={e => setVehicleFormData({...vehicleFormData, status: 'maintenance'})} className="hidden"/>
-                                                🔧 維修保養
-                                            </label>
+                                    {/* 🔥 優化：ETC 智能選單與新增卡號 */}
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                                        <label className="text-xs font-bold text-slate-700 uppercase block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-indigo-500"/> ETC 綁定設定</label>
+                                        
+                                        <select className="w-full bg-white border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm text-slate-700 mb-3 shadow-sm" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
+                                            <option value="">-- 不綁定 ETC 卡片 --</option>
+                                            {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
+                                                const owner = vehicles.find(v => v.etc === etc);
+                                                const isUsed = owner && owner.id !== editingVehicle?.id;
+                                                return <option key={etc} value={etc}>{etc} {isUsed ? `(目前由 ${owner.plate} 使用)` : ''}</option>
+                                            })}
+                                        </select>
+
+                                        <div className="flex gap-2 items-center pt-3 border-t border-slate-200/60">
+                                            <input placeholder="拿到新卡？在此輸入新卡號" className="flex-1 bg-white border border-slate-200 p-2.5 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
+                                            <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm">登錄</button>
                                         </div>
                                     </div>
 
-                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                        <label className="text-xs font-bold text-slate-700 block mb-2 flex items-center gap-1"><CreditCard size={14}/> ETC 綁定設定</label>
-                                        <select className="w-full border border-slate-300 rounded-lg p-2.5 font-mono text-sm mb-2 focus:ring-2 focus:ring-blue-200 outline-none bg-white" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
-                                                <option value="">-- 不綁定 ETC --</option>
-                                                {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
-                                                    const owner = vehicles.find(v => v.etc === etc);
-                                                    const isUsed = owner && owner.id !== editingVehicle?.id;
-                                                    return <option key={etc} value={etc}>{etc} {isUsed ? `(目前由 ${owner.plate} 使用)` : ''}</option>
-                                                })}
-                                        </select>
-                                        <div className="flex gap-2 items-center mt-3 pt-3 border-t border-slate-200">
-                                            <span className="text-xs text-slate-500 whitespace-nowrap">新增卡號</span>
-                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 border border-slate-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-blue-200 outline-none" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
-                                            <button type="button" onClick={()=>newEtcNumber && (setVehicleFormData({...vehicleFormData, etc:newEtcNumber}), setNewEtcNumber(''))} className="px-3 py-1 bg-green-500 text-white rounded text-xs whitespace-nowrap">新增</button>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2 justify-end pt-2">
-                                        <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="px-4 py-2 border rounded hover:bg-slate-50 text-slate-700">取消</button>
-                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">儲存</button>
+                                    <div className="flex gap-3 pt-4 border-t border-slate-100">
+                                        <button type="submit" className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-lg">儲存檔案</button>
                                     </div>
                                 </form>
                             </div>
