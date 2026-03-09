@@ -452,7 +452,11 @@
                 return { activeOrders: active, historyOrders: history };
             }, [orders, realTime]); 
 
-            // -- 輔助工具：處理開啟「編輯訂單」邏輯（附帶維修車防呆清理） --
+            // -- 輔助運算：是否有原車處於維修中 (移至元件主體) --
+            const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
+            const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
+
+            // Actions
             const handleEditOrder = (o) => {
                 const carInfo = vehicles.find(x => x.id === o.vehicleId);
                 const now = getJSTNominalDate();
@@ -520,7 +524,7 @@
             if (isLoading) return <div className="min-h-screen flex items-center justify-center text-slate-500">載入資料中...</div>;
 
             return (
-                <div className="pb-20 md:pb-0">
+                <div className="pb-28 md:pb-8">
                     {/* 共用彈出視窗 */}
                     {dialog.isOpen && (
                         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1084,24 +1088,24 @@
                         <button onClick={()=>setActiveTab('vehicles')} className={`flex flex-col items-center ${activeTab==='vehicles'?'text-blue-600':'text-gray-400'}`}><Car size={20}/><span>車輛</span></button>
                         <button onClick={()=>setActiveTab('orders')} className={`flex flex-col items-center ${activeTab==='orders'?'text-blue-600':'text-gray-400'}`}><Users size={20}/><span>當前訂單</span></button>
                         <button onClick={()=>setActiveTab('history')} className={`flex flex-col items-center ${activeTab==='history'?'text-blue-600':'text-gray-400'}`}><History size={20}/><span>歷史紀錄</span></button>
+                        <button onClick={()=>setActiveTab('history')} className={`flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-all ${activeTab==='history'?'text-brand-600 bg-brand-50 font-bold':'text-slate-400 hover:bg-slate-50 font-medium'}`}>
+                            <History size={20} className="mb-1" strokeWidth={activeTab==='history'?2.5:2}/><span>歷史</span>
+                        </button>
                     </div>
 
-                    {isOrderModalOpen && (() => {
-                        const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
-                        const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
-
-                        return (
-                        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-md sm:rounded-xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-2xl animate-slide-up sm:animate-fade-in">
-                                <div className="p-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl flex justify-between items-center sticky top-0">
-                                    <h3 className="font-bold text-lg text-slate-800">{editingOrder?'編輯訂單':'新增訂單'}</h3>
-                                    <button onClick={()=>setIsOrderModalOpen(false)} className="bg-slate-200 hover:bg-slate-300 rounded-full p-1 transition-colors"><X size={18} className="text-slate-600"/></button>
+                    {/* 彈出視窗：訂單 */}
+                    {isOrderModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
+                            <div className="bg-white w-full max-w-lg sm:rounded-2xl rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
+                                <div className="p-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white sm:rounded-t-2xl rounded-t-3xl z-10">
+                                    <h3 className="font-bold text-xl text-slate-800 tracking-tight">{editingOrder?'編輯訂單細節':'建立新任務'}</h3>
+                                    <button onClick={()=>setIsOrderModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 transition-colors"><X size={20} className="text-slate-600"/></button>
                                 </div>
-                                <form onSubmit={handleSaveOrder} className="p-4 overflow-y-auto space-y-4">
+                                <form onSubmit={handleSaveOrder} className="p-5 overflow-y-auto space-y-5 bg-slate-50/50">
                                     {isOriginalMaintenance && !orderFormData.vehicleId && (
-                                        <div className="bg-red-50 text-red-600 p-3 rounded-lg border border-red-200 text-sm flex items-start gap-2">
-                                            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5"/>
-                                            <div>原指派車輛 <span className="font-bold">({originalVehicle.plate})</span> 目前維修中，請重新指派其他可用車輛。</div>
+                                        <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-200 text-sm flex items-start gap-2 shadow-sm animate-pulse">
+                                            <AlertTriangle size={18} className="flex-shrink-0 mt-0.5"/>
+                                            <div className="leading-relaxed">原指派車輛 <span className="font-bold bg-white px-1 rounded mx-1 shadow-sm">({originalVehicle.plate})</span> 目前維修中，請重新指派其他可用車輛。</div>
                                         </div>
                                     )}
 
@@ -1228,15 +1232,16 @@
                                         </div>
                                     </div>
                                     
-                                    <div className="flex gap-3 justify-end pt-4 border-t mt-4 sticky bottom-0 bg-white pb-2">
-                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3 border border-slate-300 rounded-lg font-bold text-slate-600 hover:bg-slate-50 transition-colors">取消</button>
-                                        <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md">儲存訂單</button>
+                                    <div className="flex gap-3 justify-end pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
+                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3.5 border border-slate-300 rounded-xl font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">取消</button>
+                                        <button type="submit" className="flex-1 py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all active:scale-[0.98] shadow-md shadow-brand-200 text-base tracking-wide">儲存訂單</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
-                    )})}
+                    )}
 
+                    {/* 彈出視窗：車輛 */}
                     {isVehicleModalOpen && (
                         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
                             <div className="bg-white w-full max-w-md sm:rounded-xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-2xl animate-slide-up sm:animate-fade-in">
