@@ -299,8 +299,7 @@
                 orders.forEach(o => {
                     if (o.status === 'cancelled') return;
                     const startDate = new Date(o.start), endDate = new Date(o.end);
-                    const vehicle = vehicles.find(v => v.id === o.vehicleId);
-                    if (!vehicle) return;
+                    const vehicle = vehicles.find(v => v.id === o.vehicleId); // 可能為 undefined 如果未分配
 
                     if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) 
                         events.push({ id: `start-${o.id}`, type: 'pickup', time: startDate, order: o, vehicle });
@@ -346,9 +345,14 @@
 
             const handleSaveOrder = async (e) => {
                 e.preventDefault();
-                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end || !orderFormData.vehicleId) return showAlert("請填寫必填欄位");
+                // 移除 vehicleId 必填限制，讓未分配車輛的訂單也能儲存
+                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end) return showAlert("請填寫必填欄位 (客戶名稱、取/還車時間)");
                 if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return showAlert("時間錯誤，還車時間必須晚於取車時間");
-                if (!isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) return showAlert("所選車輛在該時段已被預約或處於維修狀態");
+                
+                // 如果有選車，才檢查車輛是否可用
+                if (orderFormData.vehicleId && !isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) {
+                    return showAlert("所選車輛在該時段已被預約或處於維修狀態");
+                }
 
                 try {
                     const data = { ...orderFormData, updatedAt: serverTimestamp() };
@@ -360,6 +364,10 @@
 
             const handleDeleteItem = (collectionName, id) => {
                 showConfirm("資料刪除後無法復原，確定刪除?", async () => await deleteDoc(doc(db, collectionName, id)));
+            };
+
+            const toggleExpand = (id) => {
+                setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
             };
 
             const calculateProgress = (start, end) => {
@@ -490,7 +498,7 @@
                                             <div className="p-6 text-center text-sm font-medium text-slate-400">未來 14 日內無待辦行程</div>
                                         ) : (
                                             weeklyReminders.map(evt => (
-                                                <div key={evt.id} className={`p-3 flex items-center gap-3 text-sm transition-colors hover:bg-slate-50 ${evt.vehicle.status === 'maintenance' ? 'bg-rose-50/50' : ''}`}>
+                                                <div key={evt.id} className={`p-3 flex items-center gap-3 text-sm transition-colors hover:bg-slate-50 ${evt.vehicle?.status === 'maintenance' ? 'bg-rose-50/50' : (!evt.vehicle ? 'bg-amber-50/50' : '')}`}>
                                                     <div className={`text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap w-14 text-center border shadow-sm ${evt.type === 'pickup' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-rose-100 text-rose-800 border-rose-200'}`}>
                                                         {evt.type === 'pickup' ? '🟡 交車' : '🔴 還車'}
                                                     </div>
@@ -502,7 +510,11 @@
                                                                     <MapPin size={10}/> {evt.type === 'pickup' ? evt.order.pickupLocation : evt.order.returnLocation}
                                                                 </span>
                                                             </div>
-                                                            {evt.vehicle.status === 'maintenance' ? (
+                                                            {!evt.vehicle ? (
+                                                                 <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-300 font-bold animate-pulse hover:bg-amber-200 flex items-center gap-1">
+                                                                    <AlertTriangle size={10}/> 未分配車輛 (需指派)
+                                                                </button>
+                                                            ) : evt.vehicle.status === 'maintenance' ? (
                                                                 <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded border border-rose-300 font-bold animate-pulse hover:bg-rose-200 flex items-center gap-1">
                                                                     <AlertTriangle size={10}/> 維修中 (需換車)
                                                                 </button>
@@ -512,8 +524,12 @@
                                                         </div>
                                                         <div className="text-xs text-slate-500 truncate flex items-center gap-1">
                                                             <span className="font-bold text-slate-700">{evt.order.customer}</span> 
-                                                            <span className="text-slate-300">|</span> 
-                                                            <span className={evt.vehicle.status === 'maintenance' ? 'text-rose-500 line-through' : ''}>{evt.vehicle.model}</span>
+                                                            {evt.vehicle && (
+                                                              <>
+                                                                <span className="text-slate-300">|</span> 
+                                                                <span className={evt.vehicle.status === 'maintenance' ? 'text-rose-500 line-through' : ''}>{evt.vehicle.model}</span>
+                                                              </>
+                                                            )}
                                                             {evt.order.note && <span className="text-slate-400 truncate ml-1 bg-slate-50 px-1 rounded">備註: {evt.order.note}</span>}
                                                         </div>
                                                     </div>
@@ -547,7 +563,7 @@
                                                     </div>
                                                 )}
 
-                                                <div className="p-4 cursor-pointer flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center" onClick={() => setExpandedCards(prev => ({...prev, [v.id]: !prev[v.id]}))}>
+                                                <div className="p-4 cursor-pointer flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center" onClick={() => toggleExpand(v.id)}>
                                                     <div className="flex items-center gap-4 w-full sm:w-auto">
                                                         <div className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${statusColor} whitespace-nowrap`}>{statusText}</div>
                                                         <div>
@@ -707,8 +723,8 @@
                                                             {o.customer} 
                                                             <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{isActive ? '進行中' : '預約中'}</span>
                                                         </div>
-                                                        <div className={`text-xs font-bold mt-1 flex flex-wrap items-center gap-2 ${v?.status === 'maintenance' ? 'text-rose-500' : 'text-slate-500'}`}>
-                                                            <span>{v ? `${v.plate} (${v.model})` : '車輛未分配'}</span>
+                                                        <div className={`text-xs font-bold mt-1 flex flex-wrap items-center gap-2 ${!v ? 'text-amber-500' : v.status === 'maintenance' ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                            <span>{v ? `${v.plate} (${v.model})` : '⚠️ 未分配車輛'}</span>
                                                             {v?.etc && <span className="text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100 font-mono"><CreditCard size={10}/> {v.etc}</span>}
                                                         </div>
                                                     </div>
@@ -718,6 +734,13 @@
                                                     </div>
                                                 </div>
                                                 
+                                                {!v && (
+                                                    <div className="text-xs text-amber-700 font-bold bg-amber-50 p-2.5 rounded-xl border border-amber-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
+                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 此訂單尚未指派車輛！</div>
+                                                        <button onClick={() => handleEditOrder(o)} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors shadow-sm">立即指派</button>
+                                                    </div>
+                                                )}
+
                                                 {v?.status === 'maintenance' && (
                                                     <div className="text-xs text-rose-700 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
                                                         <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 原車已進廠維修，請重新指派！</div>
@@ -747,7 +770,7 @@
                                     {historyOrders.filter(o => !historySearchTerm || o.customer.includes(historySearchTerm)).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
                                         <div key={o.id} className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
                                             <div>
-                                                <div className="font-bold text-slate-700 text-sm">{o.customer} <span className="text-[10px] font-normal text-slate-500 ml-1">{vehicles.find(v=>v.id===o.vehicleId)?.plate || '已刪除車輛'}</span></div>
+                                                <div className="font-bold text-slate-700 text-sm">{o.customer} <span className="text-[10px] font-normal text-slate-500 ml-1">{vehicles.find(v=>v.id===o.vehicleId)?.plate || '未分配/已刪除'}</span></div>
                                                 <div className="text-xs text-slate-500 font-mono mt-0.5">{formatDateTime(o.start)} - {formatDateTime(o.end)}</div>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -882,8 +905,18 @@
                                     </div>
 
                                     <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-2">指派車輛 *</label>
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-2 flex justify-between items-center">
+                                            <span>指派車輛</span>
+                                            <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded normal-case tracking-normal">可稍後再指派</span>
+                                        </label>
                                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                            <label className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${!orderFormData.vehicleId ? 'border-amber-400 bg-amber-50/50' : 'border-slate-100 hover:border-slate-300 bg-white'}`}>
+                                                <input type="radio" name="vid" className="hidden" checked={!orderFormData.vehicleId} onChange={() => setOrderFormData({...orderFormData, vehicleId: ''})}/>
+                                                <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${!orderFormData.vehicleId ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`}>
+                                                    {!orderFormData.vehicleId && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                                </div>
+                                                <div className="flex-1 font-bold text-amber-700">尚未分配車輛</div>
+                                            </label>
                                             {vehicles.map(v => {
                                                 const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
                                                 const selected = orderFormData.vehicleId === v.id;
