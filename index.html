@@ -140,7 +140,7 @@
             const [isLoading, setIsLoading] = useState(true);
             const [realTime, setRealTime] = useState(new Date());
             
-            // 🔥 新增：全局營業所視角 (預設成田)
+            // 全局營業所視角 (預設成田)
             const [viewLocation, setViewLocation] = useState('成田');
 
             const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
@@ -215,7 +215,7 @@
                 return realTime.toLocaleString('zh-TW', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             }, [realTime]);
 
-            // --- 視角過濾：只取得當前營業所的車輛 ---
+            // 視角過濾：只取得當前營業所的車輛
             const activeLocationVehicles = useMemo(() => {
                 return vehicles.filter(v => v.location === viewLocation);
             }, [vehicles, viewLocation]);
@@ -234,7 +234,6 @@
                 return t >= s && t <= e && order.status !== 'cancelled';
             };
 
-            // 儀表板數據 (根據當前營業所)
             const dashboardStats = useMemo(() => {
                 const nowStr = filterDateTime;
                 let activeCount = 0, maintenanceCount = 0, availableCount = 0;
@@ -247,7 +246,6 @@
                 return { total: activeLocationVehicles.length, active: activeCount, maintenance: maintenanceCount, available: availableCount };
             }, [activeLocationVehicles, orders, filterDateTime]);
 
-            // 車輛排序 (根據當前營業所)
             const sortedVehicles = useMemo(() => {
                 const targetTime = new Date(filterDateTime);
                 return activeLocationVehicles.map(v => {
@@ -266,12 +264,10 @@
 
             const availableVehicles = useMemo(() => sortedVehicles.filter(v => !v.activeOrder && !v.isMaintenance), [sortedVehicles]);
 
-            // 排休建議 (根據當前營業所的訂單)
             const freeDaysData = useMemo(() => {
                 const targetDate = new Date(filterDateTime);
                 const startOfTargetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
                 
-                // 只看屬於當前營業所的車輛訂單，或是「尚未指派」的訂單
                 const validOrders = orders.filter(o => {
                     if (o.status === 'cancelled') return false;
                     if (!o.vehicleId) return true; 
@@ -319,7 +315,6 @@
                 return { list: grouped, maxDate: endOfMaxDay, hasFutureEvents: true };
             }, [orders, filterDateTime, vehicles, viewLocation]);
 
-            // 14日提醒 (根據當前營業所)
             const weeklyReminders = useMemo(() => {
                 const targetJstDate = getJSTNominalDate(); 
                 const startWindow = new Date(`${filterDateTime.split('T')[0]}T00:00:00`); 
@@ -331,7 +326,6 @@
                     if (o.status === 'cancelled') return;
                     const vehicle = vehicles.find(v => v.id === o.vehicleId); 
                     
-                    // 過濾非當前營業所的訂單 (保留未分配訂單)
                     if (vehicle && vehicle.location !== viewLocation) return;
 
                     const startDate = new Date(o.start), endDate = new Date(o.end);
@@ -344,7 +338,6 @@
                 return events.sort((a, b) => a.time - b.time);
             }, [orders, vehicles, filterDateTime, viewLocation]);
 
-            // 訂單狀態分類
             const { activeOrders, historyOrders } = useMemo(() => {
                 const now = getJSTNominalDate();
                 const active = [], history = [];
@@ -367,7 +360,7 @@
 
             const toggleExpand = (id) => setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
 
-            // --- 異動 Actions ---
+            // --- Actions ---
             const handleSeedData = () => {
                 setDialog({
                     isOpen: true,
@@ -404,7 +397,6 @@
                 if (new Date(orderFormData.start) >= new Date(orderFormData.end)) {
                     return setDialog({ isOpen: true, message: "時間錯誤，還車時間必須晚於取車時間", type: 'alert' });
                 }
-                
                 if (orderFormData.vehicleId && !isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) {
                     return setDialog({ isOpen: true, message: "所選車輛在該時段已被預約或處於維修狀態", type: 'alert' });
                 }
@@ -440,7 +432,7 @@
                     onConfirm: async () => {
                         try {
                             await deleteDoc(doc(db, 'orders', id));
-                            setIsOrderModalOpen(false);
+                            setIsOrderModalOpen(false); // 關閉編輯視窗
                         } catch (error) {
                             setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
                         }
@@ -532,7 +524,6 @@
                             </div>
                             <span className="hidden sm:inline">調度中心</span>
                             
-                            {/* 🔥 營業所視角選擇器 */}
                             <div className="relative flex items-center ml-1 sm:ml-3">
                                 <Map className="absolute left-2.5 w-4 h-4 text-brand-500 pointer-events-none"/>
                                 <select 
@@ -570,6 +561,7 @@
 
                     <main className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-5">
                         
+                        {/* 初始化提示 */}
                         {vehicles.length < INITIAL_VEHICLES_SEED.length && !isLoading && (
                             <div className="mb-6 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col sm:flex-row justify-between items-center shadow-sm gap-4 animate-fade-in-up">
                                 <div className="flex items-center gap-3 text-indigo-800">
@@ -1111,11 +1103,7 @@
                     )}
 
                     {/* 訂單 Modal */}
-                    {isOrderModalOpen && (() => {
-                        const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
-                        const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
-
-                        return (
+                    {isOrderModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
                             <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
                                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sm:rounded-t-2xl rounded-t-3xl z-10 shrink-0">
@@ -1127,7 +1115,7 @@
                                     {isOriginalMaintenance && !orderFormData.vehicleId && (
                                         <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-200 text-sm flex items-start gap-2 shadow-sm animate-pulse">
                                             <AlertTriangle size={18} className="flex-shrink-0 mt-0.5"/>
-                                            <div className="leading-relaxed font-bold">原指派車輛 <span className="bg-white px-1.5 py-0.5 rounded shadow-sm mx-1 text-rose-900">{originalVehicle.plate}</span> 已進廠維修，請從下方重新指派其他可用車輛！</div>
+                                            <div className="leading-relaxed font-bold">原指派車輛 <span className="bg-white px-1.5 py-0.5 rounded shadow-sm mx-1 text-rose-900">{originalVehicle?.plate}</span> 已進廠維修，請從下方重新指派其他可用車輛！</div>
                                         </div>
                                     )}
 
@@ -1174,7 +1162,7 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-3 flex justify-between items-center">
-                                            <span>指派 {viewLocation} 車輛</span>
+                                            <span>指派車輛</span>
                                             <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded font-bold">可稍後再指派</span>
                                         </label>
                                         <div className="space-y-2 max-h-56 overflow-y-auto pr-2 pb-1">
@@ -1230,7 +1218,7 @@
                                 </form>
                             </div>
                         </div>
-                    )})}
+                    )}
 
                     {/* 車輛 Modal */}
                     {isVehicleModalOpen && (
