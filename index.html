@@ -83,7 +83,7 @@
             Plus, Search, Edit3, Trash2, Clock, Save, X, 
             LogOut, ShieldCheck, Database, CheckCircle, ArrowRight, AlertCircle,
             ChevronDown, ChevronUp, BellRing, AlertTriangle, MapPin, RotateCcw,
-            History, Activity, Zap, CheckCircle2, Navigation, Sparkles
+            History, Activity, Zap, CheckCircle2, Navigation, Sparkles, Map
         } from 'lucide-react';
 
         // --- Firebase 設定 ---
@@ -117,7 +117,8 @@
             { location: '成田', plate: '和泉335わ9999', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済', status: 'active' },
             { location: '成田', plate: 'なにわ342わ88', brand: 'Toyota', model: 'Vellfire', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active' }
         ];
-        const PRESET_LOCATIONS = ["成田二航", "成田一航", "羽田", "上野", "新宿"];
+        const PRESET_LOCATIONS = ["成田二航", "成田一航", "大阪", "福岡"];
+        const BRANCHES = ["成田", "大阪(福岡)"];
 
         // --- 時間工具 ---
         const getJSTNominalDate = () => new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
@@ -138,6 +139,9 @@
             const [orders, setOrders] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
             const [realTime, setRealTime] = useState(new Date());
+            
+            // 🔥 新增：全局營業所視角 (預設成田)
+            const [viewLocation, setViewLocation] = useState('成田');
 
             const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
             const [expandedCards, setExpandedCards] = useState({});
@@ -211,6 +215,11 @@
                 return realTime.toLocaleString('zh-TW', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             }, [realTime]);
 
+            // --- 視角過濾：只取得當前營業所的車輛 ---
+            const activeLocationVehicles = useMemo(() => {
+                return vehicles.filter(v => v.location === viewLocation);
+            }, [vehicles, viewLocation]);
+
             // 核心邏輯
             const isVehicleAvailable = (vid, start, end, excludeId) => {
                 if (!start || !end || !vid) return true;
@@ -225,21 +234,23 @@
                 return t >= s && t <= e && order.status !== 'cancelled';
             };
 
+            // 儀表板數據 (根據當前營業所)
             const dashboardStats = useMemo(() => {
                 const nowStr = filterDateTime;
                 let activeCount = 0, maintenanceCount = 0, availableCount = 0;
-                vehicles.forEach(v => {
+                activeLocationVehicles.forEach(v => {
                     if (v.status === 'maintenance') { maintenanceCount++; return; }
                     const isActive = orders.some(o => o.vehicleId === v.id && isOrderActiveAtTime(o, nowStr));
                     if (isActive) activeCount++;
                     else availableCount++;
                 });
-                return { total: vehicles.length, active: activeCount, maintenance: maintenanceCount, available: availableCount };
-            }, [vehicles, orders, filterDateTime]);
+                return { total: activeLocationVehicles.length, active: activeCount, maintenance: maintenanceCount, available: availableCount };
+            }, [activeLocationVehicles, orders, filterDateTime]);
 
+            // 車輛排序 (根據當前營業所)
             const sortedVehicles = useMemo(() => {
                 const targetTime = new Date(filterDateTime);
-                return vehicles.map(v => {
+                return activeLocationVehicles.map(v => {
                     const isMaintenance = v.status === 'maintenance';
                     const dayOrders = orders.filter(o => o.vehicleId === v.id && o.status !== 'cancelled' && new Date(o.end) > new Date(new Date(filterDateTime).setHours(0,0,0,0)));
                     const activeOrder = dayOrders.find(o => isOrderActiveAtTime(o, filterDateTime));
@@ -251,14 +262,22 @@
                     
                     return { ...v, activeOrder, futureOrders, absoluteNextOrder, isMaintenance, sortWeight, sortTime, dayOrders };
                 }).sort((a, b) => a.sortWeight !== b.sortWeight ? a.sortWeight - b.sortWeight : a.sortTime - b.sortTime);
-            }, [vehicles, orders, filterDateTime]);
+            }, [activeLocationVehicles, orders, filterDateTime]);
 
             const availableVehicles = useMemo(() => sortedVehicles.filter(v => !v.activeOrder && !v.isMaintenance), [sortedVehicles]);
 
+            // 排休建議 (根據當前營業所的訂單)
             const freeDaysData = useMemo(() => {
                 const targetDate = new Date(filterDateTime);
                 const startOfTargetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
-                const validOrders = orders.filter(o => o.status !== 'cancelled');
+                
+                // 只看屬於當前營業所的車輛訂單，或是「尚未指派」的訂單
+                const validOrders = orders.filter(o => {
+                    if (o.status === 'cancelled') return false;
+                    if (!o.vehicleId) return true; 
+                    const v = vehicles.find(x => x.id === o.vehicleId);
+                    return v && v.location === viewLocation;
+                });
                 
                 let maxDate = startOfTargetDay, hasFutureEvents = false;
                 validOrders.forEach(o => {
@@ -298,8 +317,9 @@
                 }
                 
                 return { list: grouped, maxDate: endOfMaxDay, hasFutureEvents: true };
-            }, [orders, filterDateTime]);
+            }, [orders, filterDateTime, vehicles, viewLocation]);
 
+            // 14日提醒 (根據當前營業所)
             const weeklyReminders = useMemo(() => {
                 const targetJstDate = getJSTNominalDate(); 
                 const startWindow = new Date(`${filterDateTime.split('T')[0]}T00:00:00`); 
@@ -309,8 +329,12 @@
                 const events = [];
                 orders.forEach(o => {
                     if (o.status === 'cancelled') return;
-                    const startDate = new Date(o.start), endDate = new Date(o.end);
                     const vehicle = vehicles.find(v => v.id === o.vehicleId); 
+                    
+                    // 過濾非當前營業所的訂單 (保留未分配訂單)
+                    if (vehicle && vehicle.location !== viewLocation) return;
+
+                    const startDate = new Date(o.start), endDate = new Date(o.end);
 
                     if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) 
                         events.push({ id: `start-${o.id}`, type: 'pickup', time: startDate, order: o, vehicle });
@@ -318,8 +342,9 @@
                         events.push({ id: `end-${o.id}`, type: 'return', time: endDate, order: o, vehicle });
                 });
                 return events.sort((a, b) => a.time - b.time);
-            }, [orders, vehicles, filterDateTime]);
+            }, [orders, vehicles, filterDateTime, viewLocation]);
 
+            // 訂單狀態分類
             const { activeOrders, historyOrders } = useMemo(() => {
                 const now = getJSTNominalDate();
                 const active = [], history = [];
@@ -330,7 +355,6 @@
                 return { activeOrders: active, historyOrders: history };
             }, [orders, realTime]); 
 
-            // --- 判斷原車是否維修中 ---
             const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
             const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
 
@@ -416,7 +440,7 @@
                     onConfirm: async () => {
                         try {
                             await deleteDoc(doc(db, 'orders', id));
-                            setIsOrderModalOpen(false); // 如果是在編輯模式中刪除，連帶關閉 Modal
+                            setIsOrderModalOpen(false);
                         } catch (error) {
                             setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
                         }
@@ -442,6 +466,21 @@
                     onConfirm: async () => {
                         try {
                             await deleteDoc(doc(db, 'vehicles', id));
+                        } catch (error) {
+                            setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
+                        }
+                    }
+                });
+            };
+
+            const handleDeleteItem = (collectionName, id) => {
+                setDialog({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: "資料刪除後無法復原，確定刪除?",
+                    onConfirm: async () => {
+                        try {
+                            await deleteDoc(doc(db, collectionName, id));
                         } catch (error) {
                             setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
                         }
@@ -485,25 +524,41 @@
                         </div>
                     )}
 
-                    {/* 頂部導覽列 */}
+                    {/* 頂部導覽列與視角切換 */}
                     <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-200/80 p-4 sticky top-0 z-30 flex justify-between items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-                        <div className="flex items-center gap-2.5 font-bold text-slate-800 text-lg tracking-tight">
-                            <div className="bg-brand-100 p-1.5 rounded-lg text-brand-600 shadow-inner">
+                        <div className="flex items-center gap-2 font-bold text-slate-800 text-lg tracking-tight">
+                            <div className="bg-brand-100 p-1.5 rounded-lg text-brand-600 shadow-inner hidden sm:block">
                                 <Car size={20} strokeWidth={2.5}/>
                             </div>
-                            專業調度中心
+                            <span className="hidden sm:inline">調度中心</span>
+                            
+                            {/* 🔥 營業所視角選擇器 */}
+                            <div className="relative flex items-center ml-1 sm:ml-3">
+                                <Map className="absolute left-2.5 w-4 h-4 text-brand-500 pointer-events-none"/>
+                                <select 
+                                    value={viewLocation} 
+                                    onChange={e => setViewLocation(e.target.value)}
+                                    className="pl-8 pr-8 py-1.5 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 text-sm rounded-lg outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer shadow-sm font-bold transition-colors appearance-none"
+                                >
+                                    {BRANCHES.map(branch => (
+                                        <option key={branch} value={branch}>{branch}視角</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 w-4 h-4 text-brand-600 pointer-events-none"/>
+                            </div>
                         </div>
+
                         <div className="text-xs font-medium text-slate-500 flex items-center gap-4">
                             <span className="font-mono bg-slate-100/80 px-2.5 py-1.5 rounded-md hidden md:inline-block border border-slate-200 shadow-sm text-slate-600">
                                 {liveTimeDisplay}
                             </span>
                             {user ? (
-                                <span className="text-emerald-500 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100/50">
+                                <span className="text-emerald-500 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100/50 whitespace-nowrap">
                                     <span className="relative flex h-2.5 w-2.5">
                                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                     </span>
-                                    在線
+                                    <span className="hidden sm:inline">在線</span>
                                 </span>
                             ) : <span>連線中...</span>}
                         </div>
@@ -515,15 +570,14 @@
 
                     <main className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-5">
                         
-                        {/* 初始化提示 */}
                         {vehicles.length < INITIAL_VEHICLES_SEED.length && !isLoading && (
                             <div className="mb-6 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col sm:flex-row justify-between items-center shadow-sm gap-4 animate-fade-in-up">
                                 <div className="flex items-center gap-3 text-indigo-800">
                                     <Sparkles className="w-5 h-5 shrink-0" />
-                                    <span className="text-sm font-medium">歡迎使用！系統偵測到您的車隊未滿預設數量，是否一鍵匯入最新車隊？</span>
+                                    <span className="text-sm font-medium">系統偵測到您的車隊未滿預設數量，是否一鍵匯入最新車隊？</span>
                                 </div>
                                 <button onClick={handleSeedData} className="w-full sm:w-auto px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
-                                    匯入新預設車輛
+                                    匯入預設車輛
                                 </button>
                             </div>
                         )}
@@ -533,7 +587,7 @@
                             <div className="space-y-6 animate-fade-in-up">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center hover:border-slate-300 transition-colors">
-                                        <span className="text-slate-400 text-[11px] sm:text-xs font-bold mb-1 tracking-wider uppercase">總車輛數</span>
+                                        <span className="text-slate-400 text-[11px] sm:text-xs font-bold mb-1 tracking-wider uppercase">{viewLocation} 總車數</span>
                                         <span className="text-2xl sm:text-3xl font-black text-slate-800">{dashboardStats.total}</span>
                                     </div>
                                     <div className="bg-emerald-50/50 p-4 rounded-2xl shadow-sm border border-emerald-100 flex flex-col items-center justify-center text-center">
@@ -590,7 +644,7 @@
                                 <button onClick={() => setIsVacationModalOpen(true)} className="w-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 p-4 rounded-2xl flex justify-between items-center transition-all shadow-sm border border-emerald-200/60 active:scale-[0.99] group">
                                     <div className="flex items-center gap-3 font-bold text-sm sm:text-base tracking-wide">
                                         <div className="bg-emerald-200/50 p-2 rounded-xl group-hover:scale-110 transition-transform"><Sun size={20} className="text-emerald-600"/></div>
-                                        智能調度建議：檢視人員可排休日
+                                        {viewLocation} 人員排休建議
                                     </div>
                                     <div className="flex items-center gap-2 text-xs font-semibold">
                                         <span className="hidden sm:inline bg-white px-2.5 py-1 rounded-md shadow-sm border border-emerald-100">
@@ -828,9 +882,9 @@
                         {/* VEHICLES TAB */}
                         {activeTab === 'vehicles' && (
                             <div className="space-y-4">
-                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg shadow-slate-900/20 font-bold flex justify-center items-center gap-2 active:scale-[0.98] transition-all text-lg"><Plus strokeWidth={2.5}/> 新增車隊車輛</button>
+                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: viewLocation, plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg shadow-slate-900/20 font-bold flex justify-center items-center gap-2 active:scale-[0.98] transition-all text-lg"><Plus strokeWidth={2.5}/> 在 {viewLocation} 新增車輛</button>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {vehicles.map(v => (
+                                    {activeLocationVehicles.map(v => (
                                         <div key={v.id} className={`bg-white p-5 rounded-2xl shadow-sm border flex flex-col justify-between hover:border-slate-300 transition-colors ${v.status === 'maintenance' ? 'border-rose-200 bg-rose-50/30 grayscale-[30%]' : 'border-slate-100'}`}>
                                             <div className="flex justify-between items-start mb-4">
                                                 <div>
@@ -857,6 +911,7 @@
                                             </div>
                                         </div>
                                     ))}
+                                    {activeLocationVehicles.length === 0 && <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed font-medium">此營業所尚無車輛</div>}
                                 </div>
                             </div>
                         )}
@@ -879,7 +934,29 @@
                                 </div>
 
                                 <div className="space-y-3">
-                                    {activeOrders.length === 0 ? <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-dashed border-slate-200">無進行中訂單</div> : activeOrders.filter(o => !searchTerm || o.customer.includes(searchTerm) || vehicles.find(v=>v.id===o.vehicleId)?.plate.includes(searchTerm)).sort((a,b)=>new Date(a.start)-new Date(b.start)).map(o => {
+                                    {activeOrders.filter(o => {
+                                        if (o.vehicleId) {
+                                            const v = vehicles.find(x => x.id === o.vehicleId);
+                                            if (!v || v.location !== viewLocation) return false;
+                                        }
+                                        if (searchTerm) {
+                                            const v = vehicles.find(x=>x.id===o.vehicleId);
+                                            const searchLower = searchTerm.toLowerCase();
+                                            return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
+                                        }
+                                        return true;
+                                    }).length === 0 ? <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-dashed border-slate-200">無進行中訂單</div> : activeOrders.filter(o => {
+                                        if (o.vehicleId) {
+                                            const v = vehicles.find(x => x.id === o.vehicleId);
+                                            if (!v || v.location !== viewLocation) return false;
+                                        }
+                                        if (searchTerm) {
+                                            const v = vehicles.find(x=>x.id===o.vehicleId);
+                                            const searchLower = searchTerm.toLowerCase();
+                                            return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
+                                        }
+                                        return true;
+                                    }).sort((a,b)=>new Date(a.start)-new Date(b.start)).map(o => {
                                         const v = vehicles.find(x=>x.id===o.vehicleId);
                                         const isActive = isOrderActiveAtTime(o, getJSTString(getJSTNominalDate()));
                                         return (
@@ -935,7 +1012,18 @@
                                     <input type="text" placeholder="搜尋歷史紀錄..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 outline-none shadow-sm" value={historySearchTerm} onChange={e => setHistorySearchTerm(e.target.value)}/>
                                 </div>
                                 <div className="space-y-2">
-                                    {historyOrders.filter(o => !historySearchTerm || o.customer.includes(historySearchTerm)).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
+                                    {historyOrders.filter(o => {
+                                        if (o.vehicleId) {
+                                            const v = vehicles.find(x => x.id === o.vehicleId);
+                                            if (!v || v.location !== viewLocation) return false;
+                                        }
+                                        if (historySearchTerm) {
+                                            const v = vehicles.find(x=>x.id===o.vehicleId);
+                                            const searchLower = historySearchTerm.toLowerCase();
+                                            return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
+                                        }
+                                        return true;
+                                    }).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
                                         <div key={o.id} className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
                                             <div>
                                                 <div className="font-bold text-slate-700 text-sm">{o.customer} <span className="text-[10px] font-normal text-slate-500 ml-1">{vehicles.find(v=>v.id===o.vehicleId)?.plate || '未分配/已刪除'}</span></div>
@@ -1023,7 +1111,11 @@
                     )}
 
                     {/* 訂單 Modal */}
-                    {isOrderModalOpen && (
+                    {isOrderModalOpen && (() => {
+                        const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
+                        const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
+
+                        return (
                         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
                             <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
                                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sm:rounded-t-2xl rounded-t-3xl z-10 shrink-0">
@@ -1041,7 +1133,7 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">客戶名稱 <span className="text-rose-500">*</span></label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
                                     </div>
                                     
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1059,17 +1151,17 @@
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
                                         </div>
                                     </div>
                                     
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">訂單狀態</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
                                             <option value="confirmed">🟢 正常 (依時間自動判斷狀態)</option>
                                             <option value="cancelled">🔴 已取消 (退單/未出席)</option>
                                         </select>
@@ -1077,12 +1169,12 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">備註事項 <span className="text-slate-400 font-normal">(選填)</span></label>
-                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
+                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-3 flex justify-between items-center">
-                                            <span>指派車輛</span>
+                                            <span>指派 {viewLocation} 車輛</span>
                                             <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded font-bold">可稍後再指派</span>
                                         </label>
                                         <div className="space-y-2 max-h-56 overflow-y-auto pr-2 pb-1">
@@ -1099,20 +1191,20 @@
                                                 <input type="radio" name="vid" className="hidden" checked={!orderFormData.vehicleId} onChange={()=> setOrderFormData({...orderFormData, vehicleId: ''})}/>
                                             </label>
 
-                                            {vehicles.map(v => {
+                                            {activeLocationVehicles.map(v => {
                                                 const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
                                                 const selected = orderFormData.vehicleId === v.id;
                                                 return (
-                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
+                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
                                                         <div className="flex items-center gap-3.5">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300'}`}>
                                                                 {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                                                             </div>
                                                             <div className="flex-1">
-                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-blue-900' : 'text-slate-700'}`}>{v.plate}</div>
+                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-brand-900' : 'text-slate-700'}`}>{v.plate}</div>
                                                                 <div className="text-[11px] text-slate-500 flex flex-wrap gap-1.5 items-center mt-0.5 font-medium">
                                                                     <span>{v.model}</span>
-                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-blue-600">{v.feature}</span></>}
+                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-brand-600">{v.feature}</span></>}
                                                                     {v.seats && <><span className="text-slate-300">|</span><span>{v.seats}座</span></>}
                                                                 </div>
                                                             </div>
@@ -1138,7 +1230,7 @@
                                 </form>
                             </div>
                         </div>
-                    )}
+                    )})}
 
                     {/* 車輛 Modal */}
                     {isVehicleModalOpen && (
@@ -1149,9 +1241,19 @@
                                     <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2 text-slate-600 transition-colors"><X size={18}/></button>
                                 </div>
                                 <form onSubmit={handleSaveVehicle} className="p-6 overflow-y-auto space-y-5 bg-slate-50/50">
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 <span className="text-rose-500">*</span></label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 text-base tracking-wide transition-all focus:bg-white" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 <span className="text-rose-500">*</span></label>
+                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white font-bold text-slate-800" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">所屬營業所 <span className="text-rose-500">*</span></label>
+                                            <select className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white font-bold text-slate-700 cursor-pointer" value={vehicleFormData.location} onChange={e=>setVehicleFormData({...vehicleFormData, location:e.target.value})} required>
+                                                {BRANCHES.map(branch => (
+                                                    <option key={branch} value={branch}>{branch}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1203,8 +1305,8 @@
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-blue-500"/> ETC 綁定</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-brand-500"/> ETC 綁定</label>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
                                             <option value="">-- 不綁定 ETC --</option>
                                             {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
                                                 const owner = vehicles.find(v => v.etc === etc);
@@ -1214,7 +1316,7 @@
                                         </select>
 
                                         <div className="flex gap-2 items-center pt-3 border-t border-slate-100">
-                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
+                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
                                             <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap">新增登錄</button>
                                         </div>
                                     </div>
