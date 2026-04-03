@@ -107,10 +107,11 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // 預設資料
+        // 預設資料 (共 7 台車)
         const INITIAL_VEHICLES_SEED = [
             { location: '成田', plate: '成田330わ888', brand: 'Toyota', model: 'Vellfire', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4861 3901 001', tire: '冬済', status: 'active' },
             { location: '成田', plate: '和泉330わ2222', brand: 'Toyota', model: 'Alphard', feature: '', seats: 8, etc: '8001 6161 4860 7900 000', tire: '冬済', status: 'active' },
+            { location: '成田', plate: '成田331わ 88', brand: 'Toyota', model: 'Alphard', feature: '', seats: 8, etc: '8001 6161 4860 7900 000', tire: '冬済', status: 'active' },
             { location: '成田', plate: 'なにわ334わ8888', brand: 'Toyota', model: 'Alphard', feature: '40系 Captain', seats: 7, etc: '7804 2150 2134 9280', tire: '冬済', status: 'active' },
             { location: '成田', plate: 'なにわ335わ8888', brand: 'Toyota', model: 'Alphard', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4860 6901 000', tire: '冬済', status: 'active' },           
             { location: '成田', plate: '和泉335わ9999', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済', status: 'active' },
@@ -309,7 +310,7 @@
                 orders.forEach(o => {
                     if (o.status === 'cancelled') return;
                     const startDate = new Date(o.start), endDate = new Date(o.end);
-                    const vehicle = vehicles.find(v => v.id === o.vehicleId);
+                    const vehicle = vehicles.find(v => v.id === o.vehicleId); // 可能為 undefined 如果未分配
 
                     if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) 
                         events.push({ id: `start-${o.id}`, type: 'pickup', time: startDate, order: o, vehicle });
@@ -329,7 +330,7 @@
                 return { activeOrders: active, historyOrders: history };
             }, [orders, realTime]); 
 
-            // --- UI 輔助狀態計算 ---
+            // --- 輔助運算 ---
             const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
             const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
 
@@ -347,16 +348,15 @@
                 setDialog({
                     isOpen: true,
                     type: 'confirm',
-                    message: `確定匯入預設車輛嗎？`,
+                    message: `確定匯入這 ${INITIAL_VEHICLES_SEED.length} 台預設車輛嗎？`,
                     onConfirm: async () => {
-                        setDialog({ isOpen: false, message: '', type: 'alert' });
                         try {
                             const existingPlates = vehicles.map(v => v.plate);
                             const newVehicles = INITIAL_VEHICLES_SEED.filter(v => !existingPlates.includes(v.plate));
-                            if (newVehicles.length === 0) return setDialog({ isOpen: true, message: "預設車輛已存在，無需匯入", type: 'alert' });
+                            if (newVehicles.length === 0) return setTimeout(() => setDialog({ isOpen: true, message: "預設車輛已存在，無需重複匯入", type: 'alert' }), 300);
                             await Promise.all(newVehicles.map(v => addDoc(collection(db, 'vehicles'), { ...v, createdAt: serverTimestamp() })));
-                            setDialog({ isOpen: true, message: `成功匯入 ${newVehicles.length} 台新車輛！`, type: 'alert' });
-                        } catch (e) { setDialog({ isOpen: true, message: "失敗: " + e.message, type: 'alert' }); }
+                            setTimeout(() => setDialog({ isOpen: true, message: `成功匯入 ${newVehicles.length} 台新車輛！`, type: 'alert' }), 300);
+                        } catch (e) { setTimeout(() => setDialog({ isOpen: true, message: "失敗: " + e.message, type: 'alert' }), 300); }
                     }
                 });
             };
@@ -367,7 +367,7 @@
                 setEditingOrder(o);
                 setOrderFormData({
                     ...o, 
-                    vehicleId: (carInfo && carInfo.status === 'maintenance' && isFuture) ? '' : o.vehicleId
+                    vehicleId: (carInfo && carInfo.status === 'maintenance' && isFuture) ? '' : (o.vehicleId || '')
                 }); 
                 setIsOrderModalOpen(true);
             };
@@ -399,7 +399,6 @@
                     type: 'confirm',
                     message: `確定將 ${order.customer} 的訂單標記為「已提早歸還」嗎？\n(還車時間將改為現在)`,
                     onConfirm: async () => {
-                        setDialog({ isOpen: false, message: '', type: 'alert' });
                         try {
                             const now = getJSTString(getJSTNominalDate());
                             await updateDoc(doc(db, 'orders', order.id), { end: now, updatedAt: serverTimestamp() });
@@ -415,7 +414,6 @@
                     type: 'confirm',
                     message: "資料刪除後無法復原，確定要永久刪除此訂單嗎？",
                     onConfirm: async () => {
-                        setDialog({ isOpen: false, message: '', type: 'alert' });
                         try {
                             await deleteDoc(doc(db, 'orders', id));
                         } catch (error) {
@@ -441,9 +439,23 @@
                     type: 'confirm',
                     message: "資料刪除後無法復原，確定要從車隊移除此車輛嗎？",
                     onConfirm: async () => {
-                        setDialog({ isOpen: false, message: '', type: 'alert' });
                         try {
                             await deleteDoc(doc(db, 'vehicles', id));
+                        } catch (error) {
+                            setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
+                        }
+                    }
+                });
+            };
+
+            const handleDeleteItem = (collectionName, id) => {
+                setDialog({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: "資料刪除後無法復原，確定刪除?",
+                    onConfirm: async () => {
+                        try {
+                            await deleteDoc(doc(db, collectionName, id));
                         } catch (error) {
                             setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
                         }
@@ -476,7 +488,9 @@
                                     )}
                                     <button onClick={async () => {
                                         if (dialog.type === 'confirm' && dialog.onConfirm) {
-                                            await dialog.onConfirm();
+                                            const action = dialog.onConfirm;
+                                            setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null });
+                                            await action();
                                         } else {
                                             setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null });
                                         }
@@ -516,14 +530,15 @@
 
                     <main className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-5">
                         
+                        {/* 初始化提示 */}
                         {vehicles.length < INITIAL_VEHICLES_SEED.length && !isLoading && (
                             <div className="mb-6 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col sm:flex-row justify-between items-center shadow-sm gap-4 animate-fade-in-up">
                                 <div className="flex items-center gap-3 text-indigo-800">
                                     <Sparkles className="w-5 h-5 shrink-0" />
-                                    <span className="text-sm font-medium">歡迎使用！系統偵測到似乎尚未載入完整的預設車隊資料。</span>
+                                    <span className="text-sm font-medium">歡迎使用！系統偵測到您的車隊未滿預設數量，是否一鍵匯入最新車隊？</span>
                                 </div>
                                 <button onClick={handleSeedData} className="w-full sm:w-auto px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
-                                    一鍵匯入資料
+                                    匯入新預設車輛
                                 </button>
                             </div>
                         )}
@@ -761,14 +776,14 @@
                                                                             </div>
                                                                             <div className="text-sm text-slate-600 space-y-2 w-full font-medium">
                                                                                 <div className="flex items-center gap-3">
-                                                                                    <span className="text-[10px] tracking-wider text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 w-[48px] text-center">取車</span>
+                                                                                    <span className="text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-md w-[48px] shrink-0 text-center tracking-wider font-bold">取車</span>
                                                                                     <span className="font-bold text-slate-700">{formatDateTime(o.start)}</span>
-                                                                                    <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px]">@{o.pickupLocation || '未指定'}</span>
+                                                                                    <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px] leading-snug">@{o.pickupLocation || '未指定'}</span>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-3">
-                                                                                    <span className="text-[10px] tracking-wider text-rose-600 bg-rose-50 px-2 py-1 rounded border border-rose-100 w-[48px] text-center">還車</span>
+                                                                                    <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-1 rounded-md w-[48px] shrink-0 text-center tracking-wider font-bold">還車</span>
                                                                                     <span className="font-bold text-slate-700">{formatDateTime(o.end)}</span>
-                                                                                    <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px]">@{o.returnLocation || '未指定'}</span>
+                                                                                    <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px] leading-snug">@{o.returnLocation || '未指定'}</span>
                                                                                 </div>
                                                                                 {o.note && (
                                                                                     <div className="mt-3 text-xs text-slate-600 bg-amber-50/80 p-2.5 rounded-lg border border-amber-100/50 leading-relaxed">
@@ -800,10 +815,14 @@
                                                             {!isMaintenance && (
                                                                 <button onClick={()=>{
                                                                     setEditingOrder(null);
-                                                                    let s = getNextHourJSTString();
-                                                                    let e = new Date(s); e.setDate(e.getDate()+1);
+                                                                    let defaultStart = filterDateTime;
+                                                                    if (v.dayOrders && v.dayOrders.length > 0) {
+                                                                        const lastEnd = new Date(v.dayOrders[v.dayOrders.length-1].end);
+                                                                        lastEnd.setHours(lastEnd.getHours() + 1);
+                                                                        defaultStart = getJSTString(lastEnd);
+                                                                    }
                                                                     setOrderFormData({
-                                                                        customer:'', start: s, end: getJSTString(e), vehicleId: v.id, note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'
+                                                                        customer:'', start: defaultStart, end: '', vehicleId: v.id, note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'
                                                                     });
                                                                     setIsOrderModalOpen(true);
                                                                 }} className="mt-4 w-full py-3 text-sm font-bold border-2 border-dashed border-brand-200 text-brand-600 rounded-xl bg-white hover:bg-brand-50 hover:border-brand-400 flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99]">
@@ -836,7 +855,7 @@
                                                 </div>
                                                 <div className="flex gap-1">
                                                     <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="p-2.5 text-brand-600 hover:bg-brand-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Edit3 size={16}/></button>
-                                                    <button onClick={()=>handleDeleteVehicle(v.id)} className="p-2.5 text-rose-600 hover:bg-rose-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Trash2 size={16}/></button>
+                                                    <button onClick={()=>handleDeleteItem('vehicles', v.id)} className="p-2.5 text-rose-600 hover:bg-rose-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Trash2 size={16}/></button>
                                                 </div>
                                             </div>
                                             <div className="flex gap-2 text-[11px] font-bold flex-wrap items-center">
@@ -856,79 +875,62 @@
                         )}
 
                         {activeTab === 'orders' && (
-                            <div className="space-y-5 animate-fade-in-up">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-                                    <h2 className="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
-                                        <Users className="text-brand-500"/> 目前/預約中訂單
-                                    </h2>
-                                    <div className="relative w-full sm:w-64">
+                            <div className="space-y-4">
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
                                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                        <input type="text" placeholder="搜尋客戶姓名或車牌..." className="w-full pl-9 pr-4 py-2 bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none shadow-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
+                                        <input type="text" placeholder="搜尋客戶姓名或車牌..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
                                     </div>
+                                    <button onClick={()=>{
+                                        setEditingOrder(null);
+                                        let s = getNextHourJSTString();
+                                        let e = new Date(s); e.setDate(e.getDate()+1);
+                                        setOrderFormData({customer:'', start: s, end: getJSTString(e), vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); 
+                                        setIsOrderModalOpen(true);
+                                    }} className="px-4 bg-slate-900 text-white rounded-xl shadow-sm font-bold flex items-center gap-1 hover:bg-slate-800"><Plus size={18}/><span className="hidden sm:inline">新增</span></button>
                                 </div>
 
-                                <button onClick={()=>{
-                                    setEditingOrder(null);
-                                    let s = getNextHourJSTString();
-                                    let e = new Date(s); e.setDate(e.getDate()+1);
-                                    setOrderFormData({customer:'', start: s, end: getJSTString(e), vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); 
-                                    setIsOrderModalOpen(true);
-                                }} className="w-full py-4 bg-brand-600 text-white rounded-2xl shadow-lg shadow-brand-200 font-bold flex justify-center gap-2 hover:bg-brand-700 transition-all active:scale-[0.98] text-lg"><Plus strokeWidth={2.5}/> 建立新訂單</button>
-
-                                <div className="grid grid-cols-1 gap-4">
+                                <div className="space-y-3">
                                     {activeOrders.length === 0 ? <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-dashed border-slate-200">無進行中訂單</div> : activeOrders.filter(o => !searchTerm || o.customer.includes(searchTerm) || vehicles.find(v=>v.id===o.vehicleId)?.plate.includes(searchTerm)).sort((a,b)=>new Date(a.start)-new Date(b.start)).map(o => {
                                         const v = vehicles.find(x=>x.id===o.vehicleId);
                                         const isActive = isOrderActiveAtTime(o, getJSTString(getJSTNominalDate()));
                                         return (
-                                            <div key={o.id} className={`bg-white p-5 rounded-2xl shadow-sm border-l-4 ${isActive ? 'border-l-rose-500 border-y-slate-200 border-r-slate-200 hover:shadow-md transition-all' : 'border-l-amber-400 border-y-slate-200 border-r-slate-200 hover:shadow-md transition-all'}`}>
-                                                <div className="flex justify-between items-start mb-3">
+                                            <div key={o.id} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isActive ? 'border-l-blue-500' : 'border-l-amber-400'} border-y border-r border-slate-100`}>
+                                                <div className="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <div className="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
+                                                        <div className="font-bold text-lg text-slate-800 flex items-center gap-2">
                                                             {o.customer} 
-                                                            <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold shadow-sm border ${isActive ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{isActive ? '進行中' : '即將到來'}</span>
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{isActive ? '進行中' : '預約中'}</span>
                                                         </div>
-                                                        <div className={`text-sm font-bold mt-2 inline-flex items-center px-2.5 py-1 rounded-md border ${!v ? 'text-amber-600 bg-amber-50 border-amber-200 animate-pulse' : v.status === 'maintenance' ? 'text-rose-600 bg-rose-50 border-rose-200 line-through' : 'text-slate-700 bg-slate-100 border-slate-200'}`}>
-                                                            {!v ? <><AlertTriangle size={14} className="mr-1"/> 尚未分配車輛</> : <><Car size={14} className="mr-1 -mt-0.5"/> {v.plate}</>}
+                                                        <div className={`text-xs font-bold mt-1 flex flex-wrap items-center gap-2 ${!v ? 'text-amber-500' : v.status === 'maintenance' ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                            <span>{v ? `${v.plate} (${v.model})` : '⚠️ 未分配車輛'}</span>
+                                                            {v?.etc && <span className="text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100 font-mono"><CreditCard size={10}/> {v.etc}</span>}
                                                         </div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        {isActive && <button onClick={()=>handleQuickReturn(o)} className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"><Zap size={14}/> 提早還車</button>}
+                                                        <button onClick={() => handleEditOrder(o)} className="text-slate-400 hover:text-slate-700 p-1.5 bg-slate-50 rounded-lg"><Edit3 size={16}/></button>
                                                     </div>
                                                 </div>
                                                 
                                                 {!v && (
-                                                    <div className="text-xs text-amber-700 font-bold bg-amber-50 p-3 rounded-xl border border-amber-200 mb-4 flex items-center justify-between shadow-sm">
-                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={16} /> 此訂單尚未指派車輛！</div>
-                                                        <button onClick={() => handleEditOrder(o)} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors shadow-sm active:scale-95">立即指派</button>
+                                                    <div className="text-xs text-amber-700 font-bold bg-amber-50 p-2.5 rounded-xl border border-amber-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
+                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 此訂單尚未指派車輛！</div>
+                                                        <button onClick={() => handleEditOrder(o)} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors shadow-sm">立即指派</button>
                                                     </div>
                                                 )}
 
                                                 {v?.status === 'maintenance' && (
-                                                    <div className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200 mb-4 flex items-center justify-between shadow-sm animate-pulse">
-                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={16} /> 原車已進廠維修，請重新指派！</div>
-                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors shadow-sm active:scale-95">更換車輛</button>
+                                                    <div className="text-xs text-rose-700 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
+                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 原車已進廠維修，請重新指派！</div>
+                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors shadow-sm">更換車輛</button>
                                                     </div>
                                                 )}
 
-                                                <div className="text-sm text-slate-600 mb-4 space-y-2.5 font-medium bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-emerald-700 bg-emerald-100 font-bold text-[10px] px-2 py-1 rounded-md w-[48px] shrink-0 text-center tracking-wider border border-emerald-200">取車</span>
-                                                        <span className="text-slate-800 font-bold">{formatDateTime(o.start)}</span>
-                                                        <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px] leading-snug">@{o.pickupLocation}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-rose-700 bg-rose-100 font-bold text-[10px] px-2 py-1 rounded-md w-[48px] shrink-0 text-center tracking-wider border border-rose-200">還車</span>
-                                                        <span className="text-slate-800 font-bold">{formatDateTime(o.end)}</span>
-                                                        <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px] leading-snug">@{o.returnLocation}</span>
-                                                    </div>
-                                                </div>
-                                                
-                                                {o.note && (
-                                                    <div className="text-xs text-slate-600 mb-4 bg-amber-50/80 p-3 rounded-xl border border-amber-100/50 leading-relaxed shadow-inner">
-                                                        <span className="font-bold text-amber-800">備註：</span>{o.note}
-                                                    </div>
-                                                )}
-                                                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                                                    {isActive && <button onClick={()=>handleQuickReturn(o)} className="text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5"><Zap size={16}/> 提早還車</button>}
-                                                    <button onClick={() => handleEditOrder(o)} className="text-sm font-semibold text-brand-600 bg-brand-50 border border-brand-100 hover:bg-brand-100 px-4 py-2 rounded-xl transition-colors">編輯內容</button>
-                                                    <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm font-semibold text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-100 px-4 py-2 rounded-xl transition-colors">刪除</button>
+                                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 mt-3 pt-3 border-t border-slate-50 text-sm">
+                                                    <div className="flex flex-col"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">取車 Pickup</span><span className="font-mono text-slate-700">{formatDateTime(o.start)} <span className="text-xs bg-slate-100 px-1 rounded ml-1">@{o.pickupLocation}</span></span></div>
+                                                    <div className="hidden sm:block text-slate-300 mt-3"><ArrowRight size={16}/></div>
+                                                    <div className="flex flex-col"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">還車 Return</span><span className="font-mono text-slate-700">{formatDateTime(o.end)} <span className="text-xs bg-slate-100 px-1 rounded ml-1">@{o.returnLocation}</span></span></div>
                                                 </div>
                                             </div>
                                         )
@@ -938,53 +940,24 @@
                         )}
 
                         {activeTab === 'history' && (
-                            <div className="space-y-4 animate-fade-in-up">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-                                    <h2 className="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
-                                        <History className="text-slate-500"/> 歷史訂單歸檔
-                                    </h2>
-                                    <div className="relative w-full sm:w-64">
-                                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                        <input type="text" placeholder="搜尋歷史紀錄..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-400 outline-none focus:bg-white transition-all" value={historySearchTerm} onChange={e => setHistorySearchTerm(e.target.value)}/>
-                                    </div>
+                            <div className="space-y-4">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                                    <input type="text" placeholder="搜尋歷史紀錄..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 outline-none shadow-sm" value={historySearchTerm} onChange={e => setHistorySearchTerm(e.target.value)}/>
                                 </div>
-                                <div className="text-xs font-medium text-slate-500 px-2 flex items-center gap-1.5 bg-slate-100 p-2.5 rounded-lg border border-slate-200">
-                                    <AlertCircle size={14} className="text-slate-400 shrink-0"/> 系統會自動將「已過還車時間」或「手動取消」的訂單封存於此
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
                                     {historyOrders.filter(o => !historySearchTerm || o.customer.includes(historySearchTerm)).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
-                                        <div key={o.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col justify-between opacity-90 hover:opacity-100 transition-opacity group hover:shadow-md">
+                                        <div key={o.id} className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
                                             <div>
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <span className="font-bold text-slate-700 text-lg">{o.customer}</span>
-                                                    <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold border ${o.status === 'cancelled' ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{o.status === 'cancelled' ? '已取消' : '已完成'}</span>
-                                                </div>
-                                                <div className="text-xs text-slate-500 font-bold bg-white inline-block px-2.5 py-1 rounded-md border border-slate-200 mb-4 shadow-sm">
-                                                    <Car size={12} className="inline mr-1 -mt-0.5"/> {vehicles.find(v=>v.id===o.vehicleId)?.plate || '未分配/已刪除'}
-                                                </div>
-                                                <div className="text-xs text-slate-600 mb-3 space-y-2 font-medium">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-[48px] shrink-0 text-slate-400 font-bold text-center border border-slate-200 rounded px-1 py-0.5 bg-white">取車</span>
-                                                        <span className="text-slate-700 font-bold">{formatDateTime(o.start)}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-[48px] shrink-0 text-slate-400 font-bold text-center border border-slate-200 rounded px-1 py-0.5 bg-white">還車</span>
-                                                        <span className="text-slate-700 font-bold">{formatDateTime(o.end)}</span>
-                                                    </div>
-                                                </div>
-                                                {o.note && (
-                                                    <div className="text-xs text-slate-500 mt-3 p-2.5 bg-white rounded-lg border border-slate-200 shadow-sm">
-                                                        備註：{o.note}
-                                                    </div>
-                                                )}
+                                                <div className="font-bold text-slate-700 text-sm">{o.customer} <span className="text-[10px] font-normal text-slate-500 ml-1">{vehicles.find(v=>v.id===o.vehicleId)?.plate || '未分配/已刪除'}</span></div>
+                                                <div className="text-xs text-slate-500 font-mono mt-0.5">{formatDateTime(o.start)} - {formatDateTime(o.end)}</div>
                                             </div>
-                                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => handleEditOrder(o)} className="text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-100">檢視細節</button>
-                                                <button onClick={()=>handleDeleteOrder(o.id)} className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100">永久刪除</button>
+                                            <div className="flex items-center gap-3">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${o.status === 'cancelled' ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{o.status === 'cancelled' ? '已取消' : '已完成'}</span>
+                                                <button onClick={()=>handleDeleteItem('orders', o.id)} className="text-slate-400 hover:text-rose-600"><Trash2 size={14}/></button>
                                             </div>
                                         </div>
                                     ))}
-                                    {historyOrders.length === 0 && <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed font-medium">尚無任何歷史紀錄</div>}
                                 </div>
                             </div>
                         )}
@@ -993,7 +966,7 @@
                     {/* 底部導覽列 */}
                     <div className="fixed bottom-0 left-0 right-0 glass-nav flex justify-around p-2 pb-safe z-30 sm:hidden">
                         {[ { id: 'dashboard', icon: Activity, label: '看板' }, { id: 'vehicles', icon: Car, label: '車隊' }, { id: 'orders', icon: Calendar, label: '任務' }, { id: 'history', icon: History, label: '紀錄' } ].map(tab => (
-                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex flex-col items-center justify-center w-16 h-12 rounded-xl transition-all duration-200 ${activeTab === tab.id ? 'text-brand-600 font-bold scale-110' : 'text-slate-400 font-medium hover:bg-slate-100/50'}`}>
+                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex flex-col items-center justify-center w-16 h-12 rounded-xl transition-all duration-200 ${activeTab === tab.id ? 'text-blue-600 font-bold scale-110' : 'text-slate-400 font-medium hover:bg-slate-100/50'}`}>
                                 <tab.icon size={20} className="mb-0.5" strokeWidth={activeTab === tab.id ? 2.5 : 2}/>
                                 <span className="text-[10px]">{tab.label}</span>
                             </button>
@@ -1003,7 +976,7 @@
                     {/* 桌面版導覽列 */}
                     <div className="hidden sm:flex fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-300 rounded-full px-4 py-2 shadow-2xl z-30 gap-2 items-center border border-slate-700">
                         {[ { id: 'dashboard', icon: Activity, label: '營運看板' }, { id: 'vehicles', icon: Car, label: '車隊管理' }, { id: 'orders', icon: Calendar, label: '派單任務' }, { id: 'history', icon: History, label: '歷史歸檔' } ].map(tab => (
-                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 text-sm ${activeTab === tab.id ? 'bg-brand-600 text-white font-bold shadow-lg shadow-brand-500/30' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
+                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 text-sm ${activeTab === tab.id ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/30' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
                                 <tab.icon size={16} strokeWidth={activeTab === tab.id ? 2.5 : 2}/>
                                 <span>{tab.label}</span>
                             </button>
@@ -1129,7 +1102,7 @@
                                         </label>
                                         <div className="space-y-2 max-h-56 overflow-y-auto pr-2 pb-1">
                                             {/* 未分配選項 */}
-                                            <label className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${!orderFormData.vehicleId ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400 shadow-md' : 'border-slate-100 hover:border-slate-300 bg-white'}`}>
+                                            <label className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${!orderFormData.vehicleId ? 'border-amber-400 bg-amber-50/50 ring-1 ring-amber-400 shadow-md' : 'border-slate-100 hover:border-slate-300 bg-white'}`}>
                                                 <div className="flex items-center gap-3.5">
                                                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${!orderFormData.vehicleId ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`}>
                                                         {!orderFormData.vehicleId && <div className="w-2 h-2 bg-white rounded-full"></div>}
@@ -1147,7 +1120,7 @@
                                                 return (
                                                     <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
                                                         <div className="flex items-center gap-3.5">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300'}`}>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
                                                                 {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                                                             </div>
                                                             <div className="flex-1">
@@ -1170,12 +1143,12 @@
                                     <div className="flex gap-3 pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
                                         {/* 編輯模式下的快速刪除按鈕 */}
                                         {editingOrder && (
-                                            <button type="button" onClick={() => { setIsOrderModalOpen(false); setTimeout(()=>handleDeleteOrder(editingOrder.id), 100); }} className="py-3.5 px-4 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors shadow-sm flex justify-center items-center">
+                                            <button type="button" onClick={() => { setIsOrderModalOpen(false); setTimeout(() => handleDeleteOrder(editingOrder.id), 200); }} className="py-3.5 px-4 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors shadow-sm flex justify-center items-center">
                                                 <Trash2 size={20}/>
                                             </button>
                                         )}
                                         <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-sm">取消</button>
-                                        <button type="submit" className="flex-[2] py-3.5 bg-brand-600 text-white rounded-xl font-bold text-base tracking-wide hover:bg-brand-700 transition-all active:scale-[0.98] shadow-md shadow-brand-200">儲存訂單</button>
+                                        <button type="submit" className="flex-[2] py-3.5 bg-slate-900 text-white rounded-xl font-bold text-base tracking-wide hover:bg-slate-800 transition-all active:scale-[0.98] shadow-md shadow-slate-900/20">儲存訂單</button>
                                     </div>
                                 </form>
                             </div>
@@ -1245,7 +1218,7 @@
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-brand-500"/> ETC 綁定設定</label>
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-brand-500"/> ETC 綁定</label>
                                         <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
                                             <option value="">-- 不綁定 ETC --</option>
                                             {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
@@ -1256,15 +1229,14 @@
                                         </select>
 
                                         <div className="flex gap-2 items-center pt-3 border-t border-slate-100">
-                                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap bg-slate-100 px-2 py-1 rounded">新增</span>
                                             <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
-                                            <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap">加入選單</button>
+                                            <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap">新增登錄</button>
                                         </div>
                                     </div>
                                     
                                     <div className="flex gap-3 pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
                                         <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-sm">取消</button>
-                                        <button type="submit" className="flex-1 py-3.5 bg-brand-600 text-white rounded-xl font-bold text-base tracking-wide hover:bg-brand-700 transition-all active:scale-[0.98] shadow-md shadow-brand-200">儲存檔案</button>
+                                        <button type="submit" className="flex-1 py-3.5 bg-slate-900 text-white rounded-xl font-bold text-base tracking-wide hover:bg-slate-800 transition-all active:scale-[0.98] shadow-md shadow-slate-900/20">儲存檔案</button>
                                     </div>
                                 </form>
                             </div>
