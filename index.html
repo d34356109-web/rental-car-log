@@ -2,13 +2,43 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>車輛訂單管理系統 PRO (極致調度版)</title>
+    
+    <!-- 引入 Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' }
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(16px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        scaleIn: {
+                            '0%': { opacity: '0', transform: 'scale(0.95)' },
+                            '100%': { opacity: '1', transform: 'scale(1)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     
-    <!-- React & Firebase Importmap -->
     <script type="importmap">
       {
         "imports": {
@@ -22,7 +52,6 @@
       }
     </script>
     
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -43,7 +72,7 @@
         }
     </style>
 </head>
-<body>
+<body class="text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-slate-50 to-slate-100 min-h-screen">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
@@ -54,7 +83,7 @@
             Plus, Search, Edit3, Trash2, Clock, Save, X, 
             LogOut, ShieldCheck, Database, CheckCircle, ArrowRight, AlertCircle,
             ChevronDown, ChevronUp, BellRing, AlertTriangle, MapPin, RotateCcw,
-            History, Activity, Zap, CheckCircle2, Navigation
+            History, Activity, Zap, CheckCircle2, Navigation, Sparkles
         } from 'lucide-react';
 
         // --- Firebase 設定 ---
@@ -84,12 +113,10 @@
             { location: '成田', plate: '和泉330わ2222', brand: 'Toyota', model: 'Alphard', feature: '', seats: 8, etc: '8001 6161 4860 7900 000', tire: '冬済', status: 'active' },
             { location: '成田', plate: 'なにわ334わ8888', brand: 'Toyota', model: 'Alphard', feature: '40系 Captain', seats: 7, etc: '7804 2150 2134 9280', tire: '冬済', status: 'active' },
             { location: '成田', plate: 'なにわ335わ8888', brand: 'Toyota', model: 'Alphard', feature: 'HEV 4WD', seats: 8, etc: '8001 6161 4860 6901 000', tire: '冬済', status: 'active' },           
-            { location: '成田', plate: '柏300わ2258', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4861 4901 000', tire: '冬済', status: 'active' },
-            { location: '成田', plate: '柏300わ2588', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 9901 007', tire: '冬済', status: 'active' },
-            { location: '成田', plate: '柏300わ2599', brand: 'Toyota', model: 'Alphard', feature: '4WD', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済', status: 'active' },
+            { location: '成田', plate: '和泉335わ9999', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '8001 6161 4860 0901 006', tire: '冬済', status: 'active' },
             { location: '成田', plate: 'なにわ342わ88', brand: 'Toyota', model: 'Vellfire', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active' }
         ];
-        const PRESET_LOCATIONS = ["成田二航", "成田一航", "羽田"];
+        const PRESET_LOCATIONS = ["成田二航", "成田一航", "羽田", "上野", "新宿"];
 
         // --- 時間工具 ---
         const getJSTNominalDate = () => new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
@@ -119,7 +146,6 @@
             const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
             const [editingVehicle, setEditingVehicle] = useState(null);
             
-            // 🔥 新增：管理排休彈窗 與 ETC 新卡號
             const [isVacationModalOpen, setIsVacationModalOpen] = useState(false);
             const [newEtcNumber, setNewEtcNumber] = useState('');
 
@@ -133,9 +159,6 @@
             const [vehicleFormData, setVehicleFormData] = useState({
                 location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'
             });
-
-            const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert' });
-            const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm });
 
             // 時鐘
             useEffect(() => {
@@ -189,7 +212,7 @@
 
             // 核心邏輯
             const isVehicleAvailable = (vid, start, end, excludeId) => {
-                if (!start || !end) return true;
+                if (!start || !end || !vid) return true;
                 const s = new Date(start), e = new Date(end), now = getJSTNominalDate();
                 const v = vehicles.find(v => v.id === vid);
                 if (v?.status === 'maintenance' && e > now) return false;
@@ -199,18 +222,6 @@
             const isOrderActiveAtTime = (order, targetTimeStr) => {
                 const t = new Date(targetTimeStr), s = new Date(order.start), e = new Date(order.end);
                 return t >= s && t <= e && order.status !== 'cancelled';
-            };
-
-            const handleSeedData = () => {
-                showConfirm(`確定匯入預設車輛嗎？`, async () => {
-                    try {
-                        const existingPlates = vehicles.map(v => v.plate);
-                        const newVehicles = INITIAL_VEHICLES_SEED.filter(v => !existingPlates.includes(v.plate));
-                        if (newVehicles.length === 0) return showAlert("預設車輛已存在，無需匯入");
-                        await Promise.all(newVehicles.map(v => addDoc(collection(db, 'vehicles'), { ...v, createdAt: serverTimestamp() })));
-                        showAlert(`成功匯入 ${newVehicles.length} 台新車輛！`);
-                    } catch (e) { showAlert("失敗: " + e.message); }
-                });
             };
 
             const dashboardStats = useMemo(() => {
@@ -243,7 +254,6 @@
 
             const availableVehicles = useMemo(() => sortedVehicles.filter(v => !v.activeOrder && !v.isMaintenance), [sortedVehicles]);
 
-            // 人員排休計算
             const freeDaysData = useMemo(() => {
                 const targetDate = new Date(filterDateTime);
                 const startOfTargetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
@@ -299,7 +309,7 @@
                 orders.forEach(o => {
                     if (o.status === 'cancelled') return;
                     const startDate = new Date(o.start), endDate = new Date(o.end);
-                    const vehicle = vehicles.find(v => v.id === o.vehicleId); // 可能為 undefined 如果未分配
+                    const vehicle = vehicles.find(v => v.id === o.vehicleId);
 
                     if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) 
                         events.push({ id: `start-${o.id}`, type: 'pickup', time: startDate, order: o, vehicle });
@@ -319,16 +329,35 @@
                 return { activeOrders: active, historyOrders: history };
             }, [orders, realTime]); 
 
+            // --- UI 輔助狀態計算 ---
             const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
             const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
 
-            const handleQuickReturn = (order) => {
-                showConfirm(`確定將 ${order.customer} 的訂單標記為「已提早歸還」嗎？\n(還車時間將改為現在)`, async () => {
-                    try {
-                        const now = getJSTString(getJSTNominalDate());
-                        await updateDoc(doc(db, 'orders', order.id), { end: now, updatedAt: serverTimestamp() });
-                        showAlert("✅ 車輛已歸還，訂單已移至歷史紀錄！");
-                    } catch(e) { showAlert("錯誤: " + e.message); }
+            const calculateProgress = (start, end) => {
+                const s = new Date(start).getTime(), e = new Date(end).getTime(), n = getJSTNominalDate().getTime();
+                if (n < s) return 0;
+                if (n > e) return 100;
+                return Math.max(0, Math.min(100, ((n - s) / (e - s)) * 100));
+            };
+
+            const toggleExpand = (id) => setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+
+            // --- 異動 Actions ---
+            const handleSeedData = () => {
+                setDialog({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: `確定匯入預設車輛嗎？`,
+                    onConfirm: async () => {
+                        setDialog({ isOpen: false, message: '', type: 'alert' });
+                        try {
+                            const existingPlates = vehicles.map(v => v.plate);
+                            const newVehicles = INITIAL_VEHICLES_SEED.filter(v => !existingPlates.includes(v.plate));
+                            if (newVehicles.length === 0) return setDialog({ isOpen: true, message: "預設車輛已存在，無需匯入", type: 'alert' });
+                            await Promise.all(newVehicles.map(v => addDoc(collection(db, 'vehicles'), { ...v, createdAt: serverTimestamp() })));
+                            setDialog({ isOpen: true, message: `成功匯入 ${newVehicles.length} 台新車輛！`, type: 'alert' });
+                        } catch (e) { setDialog({ isOpen: true, message: "失敗: " + e.message, type: 'alert' }); }
+                    }
                 });
             };
 
@@ -345,13 +374,15 @@
 
             const handleSaveOrder = async (e) => {
                 e.preventDefault();
-                // 移除 vehicleId 必填限制，讓未分配車輛的訂單也能儲存
-                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end) return showAlert("請填寫必填欄位 (客戶名稱、取/還車時間)");
-                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) return showAlert("時間錯誤，還車時間必須晚於取車時間");
+                if (!orderFormData.customer || !orderFormData.start || !orderFormData.end) {
+                    return setDialog({ isOpen: true, message: "請填寫必填欄位 (客戶名稱、取/還車時間)", type: 'alert' });
+                }
+                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) {
+                    return setDialog({ isOpen: true, message: "時間錯誤，還車時間必須晚於取車時間", type: 'alert' });
+                }
                 
-                // 如果有選車，才檢查車輛是否可用
                 if (orderFormData.vehicleId && !isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) {
-                    return showAlert("所選車輛在該時段已被預約或處於維修狀態");
+                    return setDialog({ isOpen: true, message: "所選車輛在該時段已被預約或處於維修狀態", type: 'alert' });
                 }
 
                 try {
@@ -359,178 +390,264 @@
                     if (editingOrder) await updateDoc(doc(db, 'orders', editingOrder.id), data);
                     else await addDoc(collection(db, 'orders'), { ...data, createdAt: serverTimestamp() });
                     setIsOrderModalOpen(false);
-                } catch (err) { showAlert("儲存失敗: " + err.message); }
+                } catch (err) { setDialog({ isOpen: true, message: "儲存失敗: " + err.message, type: 'alert' }); }
             };
 
-            const handleDeleteItem = (collectionName, id) => {
-                showConfirm("資料刪除後無法復原，確定刪除?", async () => await deleteDoc(doc(db, collectionName, id)));
+            const handleQuickReturn = (order) => {
+                setDialog({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: `確定將 ${order.customer} 的訂單標記為「已提早歸還」嗎？\n(還車時間將改為現在)`,
+                    onConfirm: async () => {
+                        setDialog({ isOpen: false, message: '', type: 'alert' });
+                        try {
+                            const now = getJSTString(getJSTNominalDate());
+                            await updateDoc(doc(db, 'orders', order.id), { end: now, updatedAt: serverTimestamp() });
+                            setTimeout(() => setDialog({ isOpen: true, message: "✅ 車輛已歸還，訂單已移至歷史紀錄！", type: 'alert' }), 300);
+                        } catch(e) { setTimeout(() => setDialog({ isOpen: true, message: "錯誤: " + e.message, type: 'alert' }), 300); }
+                    }
+                });
             };
 
-            const toggleExpand = (id) => {
-                setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+            const handleDeleteOrder = (id) => {
+                setDialog({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: "資料刪除後無法復原，確定要永久刪除此訂單嗎？",
+                    onConfirm: async () => {
+                        setDialog({ isOpen: false, message: '', type: 'alert' });
+                        try {
+                            await deleteDoc(doc(db, 'orders', id));
+                        } catch (error) {
+                            setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
+                        }
+                    }
+                });
             };
 
-            const calculateProgress = (start, end) => {
-                const s = new Date(start).getTime(), e = new Date(end).getTime(), n = getJSTNominalDate().getTime();
-                if (n < s) return 0;
-                if (n > e) return 100;
-                return Math.max(0, Math.min(100, ((n - s) / (e - s)) * 100));
+            const handleSaveVehicle = async (e) => {
+                e.preventDefault();
+                try {
+                    const data = { ...vehicleFormData, updatedAt: serverTimestamp() };
+                    if (editingVehicle) await updateDoc(doc(db, 'vehicles', editingVehicle.id), data);
+                    else await addDoc(collection(db, 'vehicles'), { ...data, createdAt: serverTimestamp() });
+                    setIsVehicleModalOpen(false);
+                } catch (err) { setDialog({ isOpen: true, message: "儲存失敗：" + err.message, type: 'alert' }); }
             };
 
-            if (isLoading) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-400 bg-slate-50">載入雲端資料中...</div>;
+            const handleDeleteVehicle = (id) => {
+                setDialog({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: "資料刪除後無法復原，確定要從車隊移除此車輛嗎？",
+                    onConfirm: async () => {
+                        setDialog({ isOpen: false, message: '', type: 'alert' });
+                        try {
+                            await deleteDoc(doc(db, 'vehicles', id));
+                        } catch (error) {
+                            setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
+                        }
+                    }
+                });
+            };
+
+
+            if (isLoading) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 space-y-4">
+                    <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
+                    <p className="text-slate-500 font-medium tracking-widest animate-pulse">載入專業調度中心...</p>
+                </div>
+            );
 
             return (
-                <div className="pb-24">
-                    {/* 共用 Dialog */}
+                <div className="pb-28 md:pb-12 text-slate-800">
+                    {/* 共用彈出視窗 */}
                     {dialog.isOpen && (
-                        <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-                                <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                                    {dialog.type === 'confirm' ? <AlertTriangle className="text-amber-500"/> : <CheckCircle2 className="text-blue-500"/>}
+                        <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-all duration-300">
+                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl transform animate-scale-in border border-slate-100">
+                                <h3 className="font-bold text-lg mb-3 text-slate-800 flex items-center gap-2">
+                                    {dialog.type === 'confirm' ? <AlertTriangle className="text-amber-500 w-6 h-6"/> : <CheckCircle2 className="text-brand-500 w-6 h-6"/>}
                                     {dialog.type === 'confirm' ? '請確認操作' : '系統提示'}
                                 </h3>
-                                <p className="text-slate-600 mb-6 text-sm leading-relaxed">{dialog.message}</p>
+                                <p className="text-slate-600 mb-8 leading-relaxed whitespace-pre-line">{dialog.message}</p>
                                 <div className="flex justify-end gap-3">
                                     {dialog.type === 'confirm' && (
-                                        <button onClick={() => setDialog({ isOpen: false, type: 'alert' })} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-medium text-slate-700 transition-colors">取消</button>
+                                        <button onClick={() => setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null })} className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-sm font-semibold text-slate-600 transition-colors">取消</button>
                                     )}
-                                    <button onClick={() => { if(dialog.onConfirm) dialog.onConfirm(); setDialog({ isOpen: false, type: 'alert' }); }} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-md">確定</button>
+                                    <button onClick={async () => {
+                                        if (dialog.type === 'confirm' && dialog.onConfirm) {
+                                            await dialog.onConfirm();
+                                        } else {
+                                            setDialog({ isOpen: false, message: '', type: 'alert', onConfirm: null });
+                                        }
+                                    }} className="px-5 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 text-sm font-semibold transition-all active:scale-95 shadow-md shadow-brand-200">確定</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* 頂部 Header */}
-                    <nav className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 sticky top-0 z-20 shadow-lg flex justify-between items-center">
-                        <div className="flex items-center gap-2 font-black tracking-wider text-lg">
-                            <Car className="text-blue-400 fill-blue-400/20"/> 調度中心 <span className="text-xs bg-blue-600 px-1.5 py-0.5 rounded text-white ml-1">PRO</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="text-xs bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 font-mono flex items-center gap-2 shadow-inner">
-                                <Clock size={12} className="text-blue-400"/>
-                                <span>{liveTimeDisplay}</span> <span className="hidden sm:inline text-slate-400">JST</span>
+                    {/* 頂部導覽列 */}
+                    <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-200/80 p-4 sticky top-0 z-30 flex justify-between items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                        <div className="flex items-center gap-2.5 font-bold text-slate-800 text-lg tracking-tight">
+                            <div className="bg-brand-100 p-1.5 rounded-lg text-brand-600 shadow-inner">
+                                <Car size={20} strokeWidth={2.5}/>
                             </div>
+                            專業調度中心
+                        </div>
+                        <div className="text-xs font-medium text-slate-500 flex items-center gap-4">
+                            <span className="font-mono bg-slate-100/80 px-2.5 py-1.5 rounded-md hidden md:inline-block border border-slate-200 shadow-sm text-slate-600">
+                                {liveTimeDisplay}
+                            </span>
+                            {user ? (
+                                <span className="text-emerald-500 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100/50">
+                                    <span className="relative flex h-2.5 w-2.5">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                    </span>
+                                    在線
+                                </span>
+                            ) : <span>連線中...</span>}
                         </div>
                     </nav>
 
-                    <main className="p-4 max-w-5xl mx-auto space-y-5">
+                    <div className="md:hidden bg-slate-100/80 text-slate-500 text-[11px] text-center py-1.5 font-mono border-b border-slate-200 tracking-wider">
+                        {liveTimeDisplay}
+                    </div>
+
+                    <main className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-5">
                         
                         {vehicles.length < INITIAL_VEHICLES_SEED.length && !isLoading && (
-                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex justify-between items-center shadow-sm">
-                                <span className="text-sm text-blue-800 font-medium">快速開始：資料庫似乎缺少部分預設車輛</span>
-                                <button onClick={handleSeedData} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs rounded-lg shadow-sm font-bold">一鍵補齊資料</button>
+                            <div className="mb-6 p-5 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col sm:flex-row justify-between items-center shadow-sm gap-4 animate-fade-in-up">
+                                <div className="flex items-center gap-3 text-indigo-800">
+                                    <Sparkles className="w-5 h-5 shrink-0" />
+                                    <span className="text-sm font-medium">歡迎使用！系統偵測到似乎尚未載入完整的預設車隊資料。</span>
+                                </div>
+                                <button onClick={handleSeedData} className="w-full sm:w-auto px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
+                                    一鍵匯入資料
+                                </button>
                             </div>
                         )}
 
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-4 gap-2 sm:gap-4">
-                                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-                                        <span className="text-slate-400 text-[10px] sm:text-xs font-bold mb-1">總車數</span>
-                                        <span className="text-xl sm:text-2xl font-black text-slate-700">{dashboardStats.total}</span>
+                            <div className="space-y-6 animate-fade-in-up">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center hover:border-slate-300 transition-colors">
+                                        <span className="text-slate-400 text-[11px] sm:text-xs font-bold mb-1 tracking-wider uppercase">總車輛數</span>
+                                        <span className="text-2xl sm:text-3xl font-black text-slate-800">{dashboardStats.total}</span>
                                     </div>
-                                    <div className="bg-green-50 p-3 rounded-2xl shadow-sm border border-green-100 flex flex-col items-center justify-center text-center">
-                                        <span className="text-green-600 text-[10px] sm:text-xs font-bold mb-1">在庫空車</span>
-                                        <span className="text-xl sm:text-2xl font-black text-green-700">{dashboardStats.available}</span>
+                                    <div className="bg-emerald-50/50 p-4 rounded-2xl shadow-sm border border-emerald-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-emerald-600 text-[11px] sm:text-xs font-bold mb-1 tracking-wider uppercase">在庫空車</span>
+                                        <span className="text-2xl sm:text-3xl font-black text-emerald-700">{dashboardStats.available}</span>
                                     </div>
-                                    <div className="bg-blue-50 p-3 rounded-2xl shadow-sm border border-blue-100 flex flex-col items-center justify-center text-center">
-                                        <span className="text-blue-600 text-[10px] sm:text-xs font-bold mb-1">出租中</span>
-                                        <span className="text-xl sm:text-2xl font-black text-blue-700">{dashboardStats.active}</span>
+                                    <div className="bg-blue-50/50 p-4 rounded-2xl shadow-sm border border-blue-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-blue-600 text-[11px] sm:text-xs font-bold mb-1 tracking-wider uppercase">出租中</span>
+                                        <span className="text-2xl sm:text-3xl font-black text-blue-700">{dashboardStats.active}</span>
                                     </div>
-                                    <div className="bg-rose-50 p-3 rounded-2xl shadow-sm border border-rose-100 flex flex-col items-center justify-center text-center">
-                                        <span className="text-rose-600 text-[10px] sm:text-xs font-bold mb-1">維修保養</span>
-                                        <span className="text-xl sm:text-2xl font-black text-rose-700">{dashboardStats.maintenance}</span>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                        <div className="flex items-center gap-2 text-slate-800 font-bold text-lg">
-                                            <Calendar className="text-blue-600" size={20}/> 時空檢視
-                                        </div>
-                                        <div className="flex items-center gap-2 w-full sm:w-auto bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-                                            <button onClick={() => setFilterDateTime(getJSTString(getJSTNominalDate()))} className="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg shadow-sm border border-slate-200 flex items-center gap-1 hover:text-blue-600 transition-colors whitespace-nowrap">
-                                                <RotateCcw size={14} /> 回到現在
-                                            </button>
-                                            <input type="datetime-local" value={filterDateTime} onChange={e=>setFilterDateTime(e.target.value)} className="bg-transparent border-none text-sm font-bold text-blue-700 focus:ring-0 outline-none w-full cursor-pointer" />
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="text-xs text-slate-600 mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                        <span className="font-bold text-green-700 bg-green-100 px-2 py-1.5 rounded-lg border border-green-200 flex items-center gap-1 whitespace-nowrap">
-                                            <Car size={14}/> 該時刻空車 ({availableVehicles.length})
-                                        </span>
-                                        <div className="flex flex-wrap gap-1.5 flex-1">
-                                            {availableVehicles.length > 0 ? availableVehicles.map(v => {
-                                                const nextStr = v.absoluteNextOrder ? formatTimeUntil(v.absoluteNextOrder.start, filterDateTime) : '無排程';
-                                                return (
-                                                    <span key={v.id} className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm">
-                                                        <span className="font-bold text-slate-700">{v.plate}</span> 
-                                                        <span className={`text-[10px] ${v.absoluteNextOrder ? 'text-amber-600' : 'text-slate-400'}`}>(至 {nextStr})</span>
-                                                    </span>
-                                                );
-                                            }) : <span className="text-slate-400 py-1 italic">此時刻無任何空車</span>}
-                                        </div>
+                                    <div className="bg-rose-50/50 p-4 rounded-2xl shadow-sm border border-rose-100 flex flex-col items-center justify-center text-center">
+                                        <span className="text-rose-600 text-[11px] sm:text-xs font-bold mb-1 tracking-wider uppercase">保養維修</span>
+                                        <span className="text-2xl sm:text-3xl font-black text-rose-700">{dashboardStats.maintenance}</span>
                                     </div>
                                 </div>
 
-                                {/* 🔥 優化：將人員排休移入按鈕，點擊彈出 */}
-                                <button onClick={() => setIsVacationModalOpen(true)} className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 p-3.5 rounded-2xl flex justify-between items-center transition-colors shadow-sm border border-emerald-100">
-                                    <div className="flex items-center gap-2 font-bold text-sm">
-                                        <div className="bg-emerald-200/50 p-1.5 rounded-lg"><Sun size={18} className="text-emerald-600"/></div>
+                                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-5 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 gap-4">
+                                    <div className="flex-1 w-full">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-3">
+                                            <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800 tracking-tight">
+                                                <Calendar className="text-brand-500 w-6 h-6"/> 調度視角
+                                            </h2>
+                                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                                <button 
+                                                    onClick={() => setFilterDateTime(getJSTString(getJSTNominalDate()))}
+                                                    className="text-xs font-bold bg-white text-slate-600 border border-slate-200 rounded-xl px-3 py-2 shadow-sm hover:bg-slate-50 hover:text-brand-600 flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+                                                >
+                                                    <RotateCcw size={14}/> 回到現在
+                                                </button>
+                                                <input type="datetime-local" value={filterDateTime} onChange={e=>setFilterDateTime(e.target.value)} className="border border-slate-200 rounded-xl p-2 font-semibold text-brand-700 text-sm shadow-sm bg-slate-50 focus:ring-2 focus:ring-brand-200 focus:bg-white outline-none w-full sm:w-auto transition-all cursor-pointer" />
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100/50">
+                                            <span className="font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 whitespace-nowrap shadow-sm text-xs">
+                                                <Car size={14}/> 該時刻空閒 ({availableVehicles.length})
+                                            </span>
+                                            <div className="flex flex-wrap gap-2 flex-1">
+                                                {availableVehicles.length > 0 
+                                                    ? availableVehicles.map(v => {
+                                                        const nextStr = v.absoluteNextOrder ? formatTimeUntil(v.absoluteNextOrder.start, filterDateTime) : '無排程';
+                                                        return (
+                                                            <span key={v.id} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-lg shadow-sm">
+                                                                <span className="font-bold text-slate-700 text-sm">{v.plate}</span> 
+                                                                <span className={`text-[10px] font-medium ${v.absoluteNextOrder ? 'text-amber-600' : 'text-slate-400'}`}>(至 {nextStr})</span>
+                                                            </span>
+                                                        );
+                                                    })
+                                                    : <span className="text-slate-400 text-sm py-1 font-medium italic">此時刻車輛皆已派出</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={() => setIsVacationModalOpen(true)} className="w-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 p-4 rounded-2xl flex justify-between items-center transition-all shadow-sm border border-emerald-200/60 active:scale-[0.99] group">
+                                    <div className="flex items-center gap-3 font-bold text-sm sm:text-base tracking-wide">
+                                        <div className="bg-emerald-200/50 p-2 rounded-xl group-hover:scale-110 transition-transform"><Sun size={20} className="text-emerald-600"/></div>
                                         智能調度建議：檢視人員可排休日
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs font-medium">
-                                        <span className="hidden sm:inline bg-emerald-100 px-2 py-1 rounded">
+                                    <div className="flex items-center gap-2 text-xs font-semibold">
+                                        <span className="hidden sm:inline bg-white px-2.5 py-1 rounded-md shadow-sm border border-emerald-100">
                                             {freeDaysData.hasFutureEvents ? `分析至: ${formatShortDateWithDay(freeDaysData.maxDate)}` : '近期無排程'}
                                         </span>
-                                        <ArrowRight size={16} className="text-emerald-600"/>
+                                        <ArrowRight size={18} className="text-emerald-600 group-hover:translate-x-1 transition-transform"/>
                                     </div>
                                 </button>
 
-                                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                                    <div className="bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 flex justify-between items-center border-b border-slate-200">
-                                        <span className="flex items-center gap-1.5"><BellRing size={16} className="text-blue-500"/> 未來 14 日行程動態 ({weeklyReminders.length})</span>
-                                        <span className="text-[10px] text-slate-400 font-medium">依您所選的時間為起點</span>
+                                <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden flex flex-col">
+                                    <div className="bg-gradient-to-r from-amber-50 to-white px-5 py-3.5 border-b border-slate-100 flex justify-between items-center">
+                                        <span className="flex items-center gap-2 font-bold text-amber-800 text-sm tracking-wide"><BellRing size={16} className="text-amber-500"/> 近 14 日交還車提醒</span>
+                                        <span className="text-[10px] font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-100">已過期自動隱藏</span>
                                     </div>
-                                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-100">
+                                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-50/50 p-2">
                                         {weeklyReminders.length === 0 ? (
-                                            <div className="p-6 text-center text-sm font-medium text-slate-400">未來 14 日內無待辦行程</div>
+                                            <div className="p-8 text-center text-sm text-slate-400 italic font-medium">未來 14 日無待辦行程</div>
                                         ) : (
                                             weeklyReminders.map(evt => (
-                                                <div key={evt.id} className={`p-3 flex items-center gap-3 text-sm transition-colors hover:bg-slate-50 ${evt.vehicle?.status === 'maintenance' ? 'bg-rose-50/50' : (!evt.vehicle ? 'bg-amber-50/50' : '')}`}>
-                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap w-14 text-center border shadow-sm ${evt.type === 'pickup' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-rose-100 text-rose-800 border-rose-200'}`}>
+                                                <div key={evt.id} className={`p-3.5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center gap-3 transition-all hover:bg-slate-50/80 ${evt.vehicle?.status === 'maintenance' ? 'bg-rose-50/50' : (!evt.vehicle ? 'bg-amber-50/30' : '')}`}>
+                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded-lg border flex-shrink-0 w-16 text-center ${evt.type === 'pickup' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-rose-100 text-rose-800 border-rose-200'}`}>
                                                         {evt.type === 'pickup' ? '🟡 交車' : '🔴 還車'}
                                                     </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex justify-between items-center mb-0.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-bold text-slate-700">{formatDateTime(evt.time)}</span>
-                                                                <span className="hidden sm:flex text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 items-center gap-0.5">
-                                                                    <MapPin size={10}/> {evt.type === 'pickup' ? evt.order.pickupLocation : evt.order.returnLocation}
+                                                    <div className="flex-1 w-full min-w-0">
+                                                        <div className="flex justify-between items-start gap-2 mb-1.5">
+                                                            <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-2 w-full">
+                                                                <span className="font-bold text-slate-800 text-sm tracking-tight whitespace-nowrap">{formatDateTime(evt.time)}</span>
+                                                                <span className="text-[11px] text-slate-600 bg-white px-2 py-1 rounded-md border border-slate-200 flex items-start sm:items-center gap-1.5 shadow-sm break-all">
+                                                                    <Navigation size={12} className="shrink-0 text-brand-500 mt-0.5 sm:mt-0"/>
+                                                                    <span className="leading-snug">{evt.type === 'pickup' ? (evt.order.pickupLocation || '未指定') : (evt.order.returnLocation || '未指定')}</span>
                                                                 </span>
                                                             </div>
                                                             {!evt.vehicle ? (
-                                                                 <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-300 font-bold animate-pulse hover:bg-amber-200 flex items-center gap-1">
-                                                                    <AlertTriangle size={10}/> 未分配車輛 (需指派)
+                                                                <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-300 font-bold animate-pulse hover:bg-amber-200 shadow-sm flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                                                    <AlertTriangle size={10}/> 未分配
                                                                 </button>
                                                             ) : evt.vehicle.status === 'maintenance' ? (
-                                                                <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded border border-rose-300 font-bold animate-pulse hover:bg-rose-200 flex items-center gap-1">
-                                                                    <AlertTriangle size={10}/> 維修中 (需換車)
+                                                                <button onClick={() => handleEditOrder(evt.order)} className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded border border-rose-300 font-bold animate-pulse hover:bg-rose-200 shadow-sm flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                                                    <AlertTriangle size={10}/> 需換車
                                                                 </button>
                                                             ) : (
-                                                                <span className="text-xs text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{evt.vehicle.plate}</span>
+                                                                <span className="text-xs text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md shrink-0 whitespace-nowrap mt-0.5">{evt.vehicle.plate}</span>
                                                             )}
                                                         </div>
-                                                        <div className="text-xs text-slate-500 truncate flex items-center gap-1">
-                                                            <span className="font-bold text-slate-700">{evt.order.customer}</span> 
+                                                        <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 leading-relaxed">
+                                                            <span className="font-semibold text-slate-700">{evt.order.customer}</span> 
                                                             {evt.vehicle && (
                                                               <>
                                                                 <span className="text-slate-300">|</span> 
                                                                 <span className={evt.vehicle.status === 'maintenance' ? 'text-rose-500 line-through' : ''}>{evt.vehicle.model}</span>
                                                               </>
                                                             )}
-                                                            {evt.order.note && <span className="text-slate-400 truncate ml-1 bg-slate-50 px-1 rounded">備註: {evt.order.note}</span>}
+                                                            {evt.order.note && (
+                                                                <>
+                                                                    <span className="text-slate-300">|</span>
+                                                                    <span className="text-slate-500 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100/50 break-all">備註: {evt.order.note}</span>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -539,16 +656,16 @@
                                     </div>
                                 </div>
 
-                                <div className="text-[10px] sm:text-xs text-slate-400 font-medium px-2 flex items-center gap-1 pt-1">
-                                    <AlertCircle size={12} /> 車輛卡片智能排序：<span className="text-blue-500">🔵 出租中(依還車時間)</span> ➔ <span className="text-amber-500">🟡 已預約(依交車時間)</span> ➔ <span className="text-green-500">🟢 完全空車</span>
+                                <div className="text-xs font-semibold text-slate-400 px-2 flex justify-between pt-2">
+                                    <span>車輛排序優先級：🔴出租中 ➔ 🟡已預約 ➔ 🟢完全空閒 ➔ 🔧維修保養</span>
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {sortedVehicles.map(v => {
                                         const isExpanded = !!expandedCards[v.id];
                                         const { activeOrder, absoluteNextOrder, isMaintenance } = v;
                                         
-                                        let statusColor = "bg-green-50 border-green-200 text-green-700";
+                                        let statusColor = "bg-emerald-50 border-emerald-200 text-emerald-700";
                                         let statusText = "空閒中";
                                         if (isMaintenance) { statusColor = "bg-rose-50 border-rose-200 text-rose-700"; statusText = "維修中"; }
                                         else if (activeOrder) { statusColor = "bg-blue-50 border-blue-200 text-blue-700"; statusText = "出租中"; }
@@ -556,87 +673,123 @@
                                         let progress = activeOrder ? calculateProgress(activeOrder.start, activeOrder.end) : 0;
 
                                         return (
-                                            <div key={v.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md">
+                                            <div 
+                                                key={v.id} 
+                                                className={`bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.02)] border ${isMaintenance ? 'border-slate-200' : activeOrder ? 'border-rose-200' : absoluteNextOrder ? 'border-amber-200' : 'border-emerald-200'} hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:ring-2 ${isMaintenance ? 'ring-slate-300' : activeOrder ? 'ring-rose-500/30' : absoluteNextOrder ? 'ring-amber-400/30' : 'ring-emerald-500/30'} transition-all duration-300 cursor-pointer flex flex-col group overflow-hidden ${isMaintenance ? 'opacity-75 grayscale-[20%]' : ''}`}
+                                                onClick={() => toggleExpand(v.id)}
+                                            >
                                                 {activeOrder && (
-                                                    <div className="h-1.5 w-full bg-slate-100">
-                                                        <div className={`h-full transition-all duration-1000 ${progress > 85 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
+                                                    <div className="h-1.5 w-full bg-rose-50">
+                                                        <div className={`h-full transition-all duration-1000 ${progress > 85 ? 'bg-rose-600 animate-pulse' : 'bg-rose-400'}`} style={{ width: `${progress}%` }}></div>
                                                     </div>
                                                 )}
 
-                                                <div className="p-4 cursor-pointer flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center" onClick={() => toggleExpand(v.id)}>
-                                                    <div className="flex items-center gap-4 w-full sm:w-auto">
-                                                        <div className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${statusColor} whitespace-nowrap`}>{statusText}</div>
+                                                <div className="p-4 sm:p-5">
+                                                    <div className="flex justify-between items-start mb-3">
                                                         <div>
-                                                            <div className="font-black text-lg text-slate-800 tracking-wide">{v.plate}</div>
-                                                            <div className="text-xs text-slate-500 font-medium flex gap-2 flex-wrap items-center mt-0.5">
+                                                            <div className="font-bold text-lg text-slate-800 tracking-tight flex items-center gap-2">
+                                                                {v.plate}
+                                                                {isMaintenance && <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200 font-bold flex items-center gap-1"><AlertTriangle size={10}/> 維修中</span>}
+                                                            </div>
+                                                            <div className="text-sm text-slate-500 font-medium flex gap-2 flex-wrap items-center mt-1">
                                                                 <span>{v.model}</span>
-                                                                {v.feature && <span>· {v.feature}</span>}
-                                                                {v.etc && <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-indigo-100 font-mono"><CreditCard size={10}/> ETC: {v.etc}</span>}
+                                                                {v.feature && <><span className="text-slate-300">•</span><span>{v.feature}</span></>}
+                                                                {v.etc && <><span className="text-slate-300">•</span><span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-indigo-100 font-mono"><CreditCard size={10}/> ETC: {v.etc}</span></>}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex flex-col items-end gap-1.5">
+                                                            <div className={`px-2.5 py-1 rounded-md text-[11px] font-bold border shadow-sm tracking-wide ${statusColor}`}>
+                                                                {statusText === '出租中' ? <span className="flex items-center gap-1 animate-pulse"><Clock size={12}/> 出租中</span> : statusText}
+                                                            </div>
+                                                            {v.futureOrders.length > 0 && !isMaintenance && (
+                                                                <span className="text-[11px] px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 font-bold flex items-center gap-1 border border-amber-100 shadow-sm tracking-wide">本日有約</span>
+                                                            )}
+                                                            <div className="mt-1 text-slate-400 bg-slate-50 border border-slate-100 rounded-full p-1 group-hover:bg-slate-100 transition-colors">
+                                                                {isExpanded ? <ChevronUp size={16} strokeWidth={2.5}/> : <ChevronDown size={16} strokeWidth={2.5}/>}
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex-1 w-full sm:w-auto flex justify-end items-center gap-3">
-                                                        {!isExpanded && (
-                                                            <div className="text-right text-sm">
-                                                                {isMaintenance ? (
-                                                                    <span className="text-rose-600 font-bold text-xs bg-rose-50 px-2 py-1 rounded-md">車廠保養中</span>
-                                                                ) : activeOrder ? (
-                                                                    <div className="flex flex-col items-end">
-                                                                        <span className="text-xs text-slate-400">還車期限</span>
-                                                                        <span className="font-bold text-blue-700">{formatDateTime(activeOrder.end)} <span className="text-[10px] text-slate-500 bg-slate-100 px-1 rounded">@{activeOrder.returnLocation}</span></span>
-                                                                    </div>
-                                                                ) : absoluteNextOrder ? (
-                                                                    <div className="flex flex-col items-end">
-                                                                        <span className="text-xs text-slate-400">可空閒至</span>
-                                                                        <span className="font-bold text-amber-600">{formatDateTime(absoluteNextOrder.start)} <span className="text-[10px] text-slate-500 bg-slate-100 px-1 rounded">@{absoluteNextOrder.pickupLocation}</span></span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded-md">無後續排程</span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        <div className="bg-slate-50 p-1.5 rounded-full text-slate-400 border border-slate-100">
-                                                            {isExpanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                                                    {!isExpanded && (
+                                                        <div className="pt-3 border-t border-slate-100/80">
+                                                            {isMaintenance ? (
+                                                                <div className="flex items-center gap-2 text-sm bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                                                                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                                                                    <span className="font-medium text-slate-600 text-xs">車廠保養中，暫停派單</span>
+                                                                </div>
+                                                            ) : activeOrder ? (
+                                                                <div className="flex items-center gap-2 text-sm bg-rose-50/50 px-3 py-2 rounded-xl border border-rose-100">
+                                                                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                                                    <span className="font-bold text-rose-800 text-xs tracking-wide">還車期限: {formatDateTime(activeOrder.end)}</span>
+                                                                    <span className="text-rose-700 font-medium text-xs ml-auto truncate">@{activeOrder.returnLocation}</span>
+                                                                </div>
+                                                            ) : absoluteNextOrder ? (
+                                                                <div className="flex items-center gap-2 text-sm bg-emerald-50/50 px-3 py-2 rounded-xl border border-emerald-100">
+                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                                    <span className="font-bold text-emerald-800 text-xs tracking-wide">可空閒至: {formatDateTime(absoluteNextOrder.start)}</span>
+                                                                    <span className="text-emerald-700 font-medium text-xs ml-auto truncate">@{absoluteNextOrder.pickupLocation}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 text-sm px-3 py-2">
+                                                                    <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                                                                    <span className="font-medium text-slate-500 text-xs tracking-wide">無後續排程，可隨時派單</span>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    </div>
+                                                    )}
                                                 </div>
 
                                                 {isExpanded && (
-                                                    <div className="px-4 pb-4 bg-slate-50/50 border-t border-slate-100" onClick={e=>e.stopPropagation()}>
-                                                        <div className="pt-4 space-y-3">
+                                                    <div className="px-5 pb-5 pt-2 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl" onClick={e=>e.stopPropagation()}>
+                                                        <div className="pt-2 space-y-3">
+                                                            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1"><Calendar size={12}/> 行程總覽</div>
                                                             {v.dayOrders.length === 0 ? (
                                                                 <div className="text-center py-4 text-xs font-medium text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">此時間點後尚無排程</div>
                                                             ) : (
                                                                 v.dayOrders.map(o => {
                                                                     const isActive = isOrderActiveAtTime(o, filterDateTime);
+                                                                    const isFuture = new Date(o.start) > new Date(filterDateTime);
+                                                                    let tagStyle = isActive ? 'bg-rose-100 text-rose-700 border-rose-200' : isFuture ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200';
+                                                                    let tagText = isActive ? '進行中' : isFuture ? '預約' : '已結束';
+
                                                                     return (
-                                                                        <div key={o.id} className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isActive ? 'bg-white border-blue-200 shadow-sm ring-1 ring-blue-50' : 'bg-white border-slate-200 opacity-80 hover:opacity-100'}`}>
-                                                                            <div>
-                                                                                <div className="flex items-center gap-2 mb-1">
-                                                                                    <span className="font-bold text-slate-800 text-base">{o.customer}</span>
-                                                                                    {isActive && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">進行中</span>}
+                                                                        <div key={o.id} className={`p-4 rounded-xl border flex flex-col items-start gap-3 transition-all shadow-sm ${isActive ? 'bg-rose-50/30 border-rose-200 ring-1 ring-rose-500/20' : 'bg-white border-slate-200'}`}>
+                                                                            <div className="flex justify-between items-center w-full mb-1.5 border-b border-black/5 pb-1">
+                                                                                <div className="font-bold text-slate-800 text-base">{o.customer}</div>
+                                                                                <span className={`text-[10px] px-2 py-0.5 rounded-md border font-bold ${tagStyle}`}>{tagText}</span>
+                                                                            </div>
+                                                                            <div className="text-sm text-slate-600 space-y-2 w-full font-medium">
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <span className="text-[10px] tracking-wider text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 w-[48px] text-center">取車</span>
+                                                                                    <span className="font-bold text-slate-700">{formatDateTime(o.start)}</span>
+                                                                                    <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px]">@{o.pickupLocation || '未指定'}</span>
                                                                                 </div>
-                                                                                <div className="text-xs text-slate-600 space-y-1">
-                                                                                    <div className="flex gap-2"><span className="text-slate-400 w-6 font-bold">取</span> <span className="font-mono">{formatDateTime(o.start)}</span> <span className="bg-slate-50 px-1 rounded text-slate-500">@{o.pickupLocation}</span></div>
-                                                                                    <div className="flex gap-2"><span className="text-slate-400 w-6 font-bold">還</span> <span className="font-mono text-blue-600 font-bold">{formatDateTime(o.end)}</span> <span className="bg-slate-50 px-1 rounded text-slate-500">@{o.returnLocation}</span></div>
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <span className="text-[10px] tracking-wider text-rose-600 bg-rose-50 px-2 py-1 rounded border border-rose-100 w-[48px] text-center">還車</span>
+                                                                                    <span className="font-bold text-slate-700">{formatDateTime(o.end)}</span>
+                                                                                    <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px]">@{o.returnLocation || '未指定'}</span>
                                                                                 </div>
-                                                                                {o.note && <div className="mt-2 text-xs text-amber-700 bg-amber-50 p-1.5 rounded-md border border-amber-100/50">備註: {o.note}</div>}
-                                                                                
-                                                                                {isMaintenance && new Date(o.end) > getJSTNominalDate() && (
-                                                                                    <div className="mt-2 text-xs bg-rose-50 p-2 rounded-md border border-rose-200 flex items-center justify-between">
-                                                                                        <span className="text-rose-700 font-bold flex items-center gap-1"><AlertTriangle size={12}/> 此車維修中，需更換車輛</span>
-                                                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-2 py-1 rounded hover:bg-rose-700 font-bold">重新指派</button>
+                                                                                {o.note && (
+                                                                                    <div className="mt-3 text-xs text-slate-600 bg-amber-50/80 p-2.5 rounded-lg border border-amber-100/50 leading-relaxed">
+                                                                                        <span className="font-bold text-amber-800">備註：</span>{o.note}
                                                                                     </div>
                                                                                 )}
-                                                                            </div>
-                                                                            
-                                                                            <div className="flex gap-2 justify-end sm:flex-col mt-2 sm:mt-0">
-                                                                                <button onClick={() => handleEditOrder(o)} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">編輯</button>
-                                                                                {isActive && (
-                                                                                    <button onClick={() => handleQuickReturn(o)} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm">
-                                                                                        <Zap size={12}/> 提早歸還
-                                                                                    </button>
+                                                                                {isMaintenance && new Date(o.end) > getJSTNominalDate() && (
+                                                                                    <div className="mt-3 text-xs bg-rose-50 p-3 rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
+                                                                                        <span className="text-rose-700 font-bold flex items-center gap-1.5"><AlertTriangle size={14}/> 原車維修中，請換車</span>
+                                                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-3 py-1.5 rounded-md shadow-sm hover:bg-rose-700 font-bold active:scale-95 transition-all">重新指派</button>
+                                                                                    </div>
+                                                                                )}
+                                                                                {!isMaintenance && (
+                                                                                    <div className="flex gap-2 justify-end mt-3 pt-3 border-t border-slate-50">
+                                                                                        <button onClick={() => handleEditOrder(o)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">編輯內容</button>
+                                                                                        {isActive && (
+                                                                                            <button onClick={() => handleQuickReturn(o)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm">
+                                                                                                <Zap size={14}/> 提早歸還
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
                                                                         </div>
@@ -653,8 +806,8 @@
                                                                         customer:'', start: s, end: getJSTString(e), vehicleId: v.id, note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'
                                                                     });
                                                                     setIsOrderModalOpen(true);
-                                                                }} className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-600 bg-white hover:bg-blue-50 hover:border-blue-400 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
-                                                                    <Plus size={16}/> 指派新訂單給 {v.plate}
+                                                                }} className="mt-4 w-full py-3 text-sm font-bold border-2 border-dashed border-brand-200 text-brand-600 rounded-xl bg-white hover:bg-brand-50 hover:border-brand-400 flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99]">
+                                                                    <Plus size={18} strokeWidth={2.5}/> 為此車新增派單
                                                                 </button>
                                                             )}
                                                         </div>
@@ -669,25 +822,32 @@
 
                         {activeTab === 'vehicles' && (
                             <div className="space-y-4">
-                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-md font-bold flex justify-center items-center gap-2"><Plus/> 新增車隊車輛</button>
+                                <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg shadow-slate-900/20 font-bold flex justify-center items-center gap-2 active:scale-[0.98] transition-all text-lg"><Plus strokeWidth={2.5}/> 新增車隊車輛</button>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {vehicles.map(v => (
-                                        <div key={v.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:border-slate-300 transition-colors">
-                                            <div className="flex justify-between items-start mb-3">
+                                        <div key={v.id} className={`bg-white p-5 rounded-2xl shadow-sm border flex flex-col justify-between hover:border-slate-300 transition-colors ${v.status === 'maintenance' ? 'border-rose-200 bg-rose-50/30 grayscale-[30%]' : 'border-slate-100'}`}>
+                                            <div className="flex justify-between items-start mb-4">
                                                 <div>
-                                                    <div className="font-black text-lg text-slate-800 tracking-wide">{v.plate} <span className="text-[10px] font-normal text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded ml-1">{v.location}</span></div>
+                                                    <div className="font-black text-lg text-slate-800 tracking-wide flex items-center gap-2">
+                                                        {v.plate} 
+                                                        <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-100">{v.location}</span>
+                                                    </div>
                                                     <div className="text-sm text-slate-500 font-medium mt-1">{v.model} {v.feature && `· ${v.feature}`}</div>
                                                 </div>
                                                 <div className="flex gap-1">
-                                                    <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg"><Edit3 size={16}/></button>
-                                                    <button onClick={()=>handleDeleteItem('vehicles', v.id)} className="p-2 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-lg"><Trash2 size={16}/></button>
+                                                    <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="p-2.5 text-brand-600 hover:bg-brand-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Edit3 size={16}/></button>
+                                                    <button onClick={()=>handleDeleteVehicle(v.id)} className="p-2.5 text-rose-600 hover:bg-rose-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Trash2 size={16}/></button>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2 text-[10px] font-bold flex-wrap items-center">
-                                                <span className={`px-2 py-1 rounded-md ${v.status === 'maintenance' ? 'bg-rose-100 text-rose-700' : 'bg-green-100 text-green-700'}`}>{v.status === 'maintenance' ? '🔧 維修中' : '✅ 營運中'}</span>
+                                            <div className="flex gap-2 text-[11px] font-bold flex-wrap items-center">
+                                                {v.status === 'maintenance' ? (
+                                                    <span className="px-2 py-1 rounded-md bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1"><AlertTriangle size={12}/> 維修中</span>
+                                                ) : (
+                                                    <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1"><CheckCircle size={12}/> 營運中</span>
+                                                )}
                                                 <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200">💺 {v.seats}座</span>
                                                 {v.tire && <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200">{v.tire === '冬済' ? '❄️ 冬胎' : '☀️ 夏胎'}</span>}
-                                                {v.etc && <span className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-200 flex items-center gap-1 font-mono"><CreditCard size={10}/> ETC: {v.etc}</span>}
+                                                {v.etc && <span className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-100 flex items-center gap-1 font-mono shadow-inner"><CreditCard size={10}/> ETC: {v.etc}</span>}
                                             </div>
                                         </div>
                                     ))}
@@ -696,62 +856,79 @@
                         )}
 
                         {activeTab === 'orders' && (
-                            <div className="space-y-4">
-                                <div className="flex gap-2">
-                                    <div className="relative flex-1">
+                            <div className="space-y-5 animate-fade-in-up">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                                    <h2 className="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
+                                        <Users className="text-brand-500"/> 目前/預約中訂單
+                                    </h2>
+                                    <div className="relative w-full sm:w-64">
                                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                        <input type="text" placeholder="搜尋客戶姓名或車牌..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
+                                        <input type="text" placeholder="搜尋客戶姓名或車牌..." className="w-full pl-9 pr-4 py-2 bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none shadow-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
                                     </div>
-                                    <button onClick={()=>{
-                                        setEditingOrder(null);
-                                        let s = getNextHourJSTString();
-                                        let e = new Date(s); e.setDate(e.getDate()+1);
-                                        setOrderFormData({customer:'', start: s, end: getJSTString(e), vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); 
-                                        setIsOrderModalOpen(true);
-                                    }} className="px-4 bg-slate-900 text-white rounded-xl shadow-sm font-bold flex items-center gap-1 hover:bg-slate-800"><Plus size={18}/><span className="hidden sm:inline">新增</span></button>
                                 </div>
 
-                                <div className="space-y-3">
+                                <button onClick={()=>{
+                                    setEditingOrder(null);
+                                    let s = getNextHourJSTString();
+                                    let e = new Date(s); e.setDate(e.getDate()+1);
+                                    setOrderFormData({customer:'', start: s, end: getJSTString(e), vehicleId:'', note:'', status:'confirmed', pickupLocation: '成田二航', returnLocation: '成田二航'}); 
+                                    setIsOrderModalOpen(true);
+                                }} className="w-full py-4 bg-brand-600 text-white rounded-2xl shadow-lg shadow-brand-200 font-bold flex justify-center gap-2 hover:bg-brand-700 transition-all active:scale-[0.98] text-lg"><Plus strokeWidth={2.5}/> 建立新訂單</button>
+
+                                <div className="grid grid-cols-1 gap-4">
                                     {activeOrders.length === 0 ? <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-dashed border-slate-200">無進行中訂單</div> : activeOrders.filter(o => !searchTerm || o.customer.includes(searchTerm) || vehicles.find(v=>v.id===o.vehicleId)?.plate.includes(searchTerm)).sort((a,b)=>new Date(a.start)-new Date(b.start)).map(o => {
                                         const v = vehicles.find(x=>x.id===o.vehicleId);
                                         const isActive = isOrderActiveAtTime(o, getJSTString(getJSTNominalDate()));
                                         return (
-                                            <div key={o.id} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isActive ? 'border-l-blue-500' : 'border-l-amber-400'} border-y border-r border-slate-100`}>
-                                                <div className="flex justify-between items-start mb-2">
+                                            <div key={o.id} className={`bg-white p-5 rounded-2xl shadow-sm border-l-4 ${isActive ? 'border-l-rose-500 border-y-slate-200 border-r-slate-200 hover:shadow-md transition-all' : 'border-l-amber-400 border-y-slate-200 border-r-slate-200 hover:shadow-md transition-all'}`}>
+                                                <div className="flex justify-between items-start mb-3">
                                                     <div>
-                                                        <div className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                                        <div className="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
                                                             {o.customer} 
-                                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{isActive ? '進行中' : '預約中'}</span>
+                                                            <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold shadow-sm border ${isActive ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{isActive ? '進行中' : '即將到來'}</span>
                                                         </div>
-                                                        <div className={`text-xs font-bold mt-1 flex flex-wrap items-center gap-2 ${!v ? 'text-amber-500' : v.status === 'maintenance' ? 'text-rose-500' : 'text-slate-500'}`}>
-                                                            <span>{v ? `${v.plate} (${v.model})` : '⚠️ 未分配車輛'}</span>
-                                                            {v?.etc && <span className="text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100 font-mono"><CreditCard size={10}/> {v.etc}</span>}
+                                                        <div className={`text-sm font-bold mt-2 inline-flex items-center px-2.5 py-1 rounded-md border ${!v ? 'text-amber-600 bg-amber-50 border-amber-200 animate-pulse' : v.status === 'maintenance' ? 'text-rose-600 bg-rose-50 border-rose-200 line-through' : 'text-slate-700 bg-slate-100 border-slate-200'}`}>
+                                                            {!v ? <><AlertTriangle size={14} className="mr-1"/> 尚未分配車輛</> : <><Car size={14} className="mr-1 -mt-0.5"/> {v.plate}</>}
                                                         </div>
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        {isActive && <button onClick={()=>handleQuickReturn(o)} className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"><Zap size={14}/> 提早還車</button>}
-                                                        <button onClick={() => handleEditOrder(o)} className="text-slate-400 hover:text-slate-700 p-1.5 bg-slate-50 rounded-lg"><Edit3 size={16}/></button>
                                                     </div>
                                                 </div>
                                                 
                                                 {!v && (
-                                                    <div className="text-xs text-amber-700 font-bold bg-amber-50 p-2.5 rounded-xl border border-amber-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
-                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 此訂單尚未指派車輛！</div>
-                                                        <button onClick={() => handleEditOrder(o)} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors shadow-sm">立即指派</button>
+                                                    <div className="text-xs text-amber-700 font-bold bg-amber-50 p-3 rounded-xl border border-amber-200 mb-4 flex items-center justify-between shadow-sm">
+                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={16} /> 此訂單尚未指派車輛！</div>
+                                                        <button onClick={() => handleEditOrder(o)} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition-colors shadow-sm active:scale-95">立即指派</button>
                                                     </div>
                                                 )}
 
                                                 {v?.status === 'maintenance' && (
-                                                    <div className="text-xs text-rose-700 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200 mb-3 flex items-center justify-between shadow-sm animate-pulse">
-                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={14} /> 原車已進廠維修，請重新指派！</div>
-                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors shadow-sm">更換車輛</button>
+                                                    <div className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200 mb-4 flex items-center justify-between shadow-sm animate-pulse">
+                                                        <div className="flex items-center gap-1.5"><AlertTriangle size={16} /> 原車已進廠維修，請重新指派！</div>
+                                                        <button onClick={() => handleEditOrder(o)} className="bg-rose-600 text-white px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors shadow-sm active:scale-95">更換車輛</button>
                                                     </div>
                                                 )}
 
-                                                <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 mt-3 pt-3 border-t border-slate-50 text-sm">
-                                                    <div className="flex flex-col"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">取車 Pickup</span><span className="font-mono text-slate-700">{formatDateTime(o.start)} <span className="text-xs bg-slate-100 px-1 rounded ml-1">@{o.pickupLocation}</span></span></div>
-                                                    <div className="hidden sm:block text-slate-300 mt-3"><ArrowRight size={16}/></div>
-                                                    <div className="flex flex-col"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">還車 Return</span><span className="font-mono text-slate-700">{formatDateTime(o.end)} <span className="text-xs bg-slate-100 px-1 rounded ml-1">@{o.returnLocation}</span></span></div>
+                                                <div className="text-sm text-slate-600 mb-4 space-y-2.5 font-medium bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-emerald-700 bg-emerald-100 font-bold text-[10px] px-2 py-1 rounded-md w-[48px] shrink-0 text-center tracking-wider border border-emerald-200">取車</span>
+                                                        <span className="text-slate-800 font-bold">{formatDateTime(o.start)}</span>
+                                                        <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px] leading-snug">@{o.pickupLocation}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-rose-700 bg-rose-100 font-bold text-[10px] px-2 py-1 rounded-md w-[48px] shrink-0 text-center tracking-wider border border-rose-200">還車</span>
+                                                        <span className="text-slate-800 font-bold">{formatDateTime(o.end)}</span>
+                                                        <span className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm ml-auto text-right break-all max-w-[120px] leading-snug">@{o.returnLocation}</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                {o.note && (
+                                                    <div className="text-xs text-slate-600 mb-4 bg-amber-50/80 p-3 rounded-xl border border-amber-100/50 leading-relaxed shadow-inner">
+                                                        <span className="font-bold text-amber-800">備註：</span>{o.note}
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                                    {isActive && <button onClick={()=>handleQuickReturn(o)} className="text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5"><Zap size={16}/> 提早還車</button>}
+                                                    <button onClick={() => handleEditOrder(o)} className="text-sm font-semibold text-brand-600 bg-brand-50 border border-brand-100 hover:bg-brand-100 px-4 py-2 rounded-xl transition-colors">編輯內容</button>
+                                                    <button onClick={()=>handleDeleteOrder(o.id)} className="text-sm font-semibold text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-100 px-4 py-2 rounded-xl transition-colors">刪除</button>
                                                 </div>
                                             </div>
                                         )
@@ -761,24 +938,53 @@
                         )}
 
                         {activeTab === 'history' && (
-                            <div className="space-y-4">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                    <input type="text" placeholder="搜尋歷史紀錄..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 outline-none shadow-sm" value={historySearchTerm} onChange={e => setHistorySearchTerm(e.target.value)}/>
+                            <div className="space-y-4 animate-fade-in-up">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                                    <h2 className="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
+                                        <History className="text-slate-500"/> 歷史訂單歸檔
+                                    </h2>
+                                    <div className="relative w-full sm:w-64">
+                                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                                        <input type="text" placeholder="搜尋歷史紀錄..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-400 outline-none focus:bg-white transition-all" value={historySearchTerm} onChange={e => setHistorySearchTerm(e.target.value)}/>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
+                                <div className="text-xs font-medium text-slate-500 px-2 flex items-center gap-1.5 bg-slate-100 p-2.5 rounded-lg border border-slate-200">
+                                    <AlertCircle size={14} className="text-slate-400 shrink-0"/> 系統會自動將「已過還車時間」或「手動取消」的訂單封存於此
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {historyOrders.filter(o => !historySearchTerm || o.customer.includes(historySearchTerm)).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
-                                        <div key={o.id} className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
+                                        <div key={o.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col justify-between opacity-90 hover:opacity-100 transition-opacity group hover:shadow-md">
                                             <div>
-                                                <div className="font-bold text-slate-700 text-sm">{o.customer} <span className="text-[10px] font-normal text-slate-500 ml-1">{vehicles.find(v=>v.id===o.vehicleId)?.plate || '未分配/已刪除'}</span></div>
-                                                <div className="text-xs text-slate-500 font-mono mt-0.5">{formatDateTime(o.start)} - {formatDateTime(o.end)}</div>
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <span className="font-bold text-slate-700 text-lg">{o.customer}</span>
+                                                    <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold border ${o.status === 'cancelled' ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{o.status === 'cancelled' ? '已取消' : '已完成'}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 font-bold bg-white inline-block px-2.5 py-1 rounded-md border border-slate-200 mb-4 shadow-sm">
+                                                    <Car size={12} className="inline mr-1 -mt-0.5"/> {vehicles.find(v=>v.id===o.vehicleId)?.plate || '未分配/已刪除'}
+                                                </div>
+                                                <div className="text-xs text-slate-600 mb-3 space-y-2 font-medium">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-[48px] shrink-0 text-slate-400 font-bold text-center border border-slate-200 rounded px-1 py-0.5 bg-white">取車</span>
+                                                        <span className="text-slate-700 font-bold">{formatDateTime(o.start)}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-[48px] shrink-0 text-slate-400 font-bold text-center border border-slate-200 rounded px-1 py-0.5 bg-white">還車</span>
+                                                        <span className="text-slate-700 font-bold">{formatDateTime(o.end)}</span>
+                                                    </div>
+                                                </div>
+                                                {o.note && (
+                                                    <div className="text-xs text-slate-500 mt-3 p-2.5 bg-white rounded-lg border border-slate-200 shadow-sm">
+                                                        備註：{o.note}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${o.status === 'cancelled' ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{o.status === 'cancelled' ? '已取消' : '已完成'}</span>
-                                                <button onClick={()=>handleDeleteItem('orders', o.id)} className="text-slate-400 hover:text-rose-600"><Trash2 size={14}/></button>
+                                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => handleEditOrder(o)} className="text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-100">檢視細節</button>
+                                                <button onClick={()=>handleDeleteOrder(o.id)} className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100">永久刪除</button>
                                             </div>
                                         </div>
                                     ))}
+                                    {historyOrders.length === 0 && <div className="col-span-full text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed font-medium">尚無任何歷史紀錄</div>}
                                 </div>
                             </div>
                         )}
@@ -787,7 +993,7 @@
                     {/* 底部導覽列 */}
                     <div className="fixed bottom-0 left-0 right-0 glass-nav flex justify-around p-2 pb-safe z-30 sm:hidden">
                         {[ { id: 'dashboard', icon: Activity, label: '看板' }, { id: 'vehicles', icon: Car, label: '車隊' }, { id: 'orders', icon: Calendar, label: '任務' }, { id: 'history', icon: History, label: '紀錄' } ].map(tab => (
-                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex flex-col items-center justify-center w-16 h-12 rounded-xl transition-all duration-200 ${activeTab === tab.id ? 'text-blue-600 font-bold scale-110' : 'text-slate-400 font-medium hover:bg-slate-100/50'}`}>
+                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex flex-col items-center justify-center w-16 h-12 rounded-xl transition-all duration-200 ${activeTab === tab.id ? 'text-brand-600 font-bold scale-110' : 'text-slate-400 font-medium hover:bg-slate-100/50'}`}>
                                 <tab.icon size={20} className="mb-0.5" strokeWidth={activeTab === tab.id ? 2.5 : 2}/>
                                 <span className="text-[10px]">{tab.label}</span>
                             </button>
@@ -797,7 +1003,7 @@
                     {/* 桌面版導覽列 */}
                     <div className="hidden sm:flex fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-300 rounded-full px-4 py-2 shadow-2xl z-30 gap-2 items-center border border-slate-700">
                         {[ { id: 'dashboard', icon: Activity, label: '營運看板' }, { id: 'vehicles', icon: Car, label: '車隊管理' }, { id: 'orders', icon: Calendar, label: '派單任務' }, { id: 'history', icon: History, label: '歷史歸檔' } ].map(tab => (
-                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 text-sm ${activeTab === tab.id ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/30' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
+                            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 text-sm ${activeTab === tab.id ? 'bg-brand-600 text-white font-bold shadow-lg shadow-brand-500/30' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
                                 <tab.icon size={16} strokeWidth={activeTab === tab.id ? 2.5 : 2}/>
                                 <span>{tab.label}</span>
                             </button>
@@ -807,10 +1013,10 @@
                     {/* 🔥 新增：人員排休分析 Modal */}
                     {isVacationModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
+                            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
                                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50/50 rounded-t-3xl sm:rounded-t-2xl">
                                     <h3 className="font-black text-lg text-emerald-800 flex items-center gap-2"><Sun className="text-emerald-500"/> 人員可全日休假日期</h3>
-                                    <button onClick={()=>setIsVacationModalOpen(false)} className="bg-white hover:bg-emerald-100 rounded-full p-2 text-emerald-600 shadow-sm"><X size={18}/></button>
+                                    <button onClick={()=>setIsVacationModalOpen(false)} className="bg-white hover:bg-emerald-100 rounded-full p-2 text-emerald-600 shadow-sm transition-colors"><X size={18}/></button>
                                 </div>
                                 <div className="p-6 overflow-y-auto bg-slate-50/50">
                                     {!freeDaysData.hasFutureEvents ? (
@@ -822,13 +1028,13 @@
                                     ) : freeDaysData.list.length === 0 ? (
                                         <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
                                             <div className="text-slate-400 font-medium mb-1">無法安排全日休假</div>
-                                            <div className="text-slate-500 text-xs px-4">直至最後一筆行程前，每日皆需前往交/還車。</div>
+                                            <div className="text-slate-500 text-xs px-4 leading-relaxed">直至最後一筆行程前，每日皆需前往交/還車。</div>
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
-                                            <div className="text-xs text-slate-500 flex items-center gap-1.5 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
-                                                <Navigation size={14} className="text-emerald-500"/>
-                                                系統已幫您過濾掉需要「交車」或「還車」的日期。
+                                            <div className="text-xs text-slate-500 flex items-start gap-1.5 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                                <Navigation size={14} className="text-emerald-500 shrink-0 mt-0.5"/>
+                                                系統已幫您過濾掉所有需要「交車」或「還車」的日期。
                                             </div>
                                             <div className="grid grid-cols-1 gap-3">
                                                 {freeDaysData.list.map((group, i) => {
@@ -836,10 +1042,10 @@
                                                     const isSingle = start.getTime() === end.getTime();
                                                     return (
                                                         <div key={i} className="bg-white border border-emerald-200 p-4 rounded-xl shadow-sm flex items-center justify-between border-l-4 border-l-emerald-500">
-                                                            <div className="font-bold text-slate-700">
+                                                            <div className="font-bold text-slate-700 text-sm tracking-wide">
                                                                 {isSingle ? formatDateOnly(start) : `${formatDateOnly(start)} ~ ${formatShortDateWithDay(end)}`}
                                                             </div>
-                                                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">可排休</span>
+                                                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold border border-emerald-200">可排休</span>
                                                         </div>
                                                     );
                                                 })}
@@ -848,21 +1054,25 @@
                                     )}
                                 </div>
                                 <div className="p-4 border-t border-slate-100 bg-white sm:rounded-b-2xl">
-                                    <button onClick={()=>setIsVacationModalOpen(false)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-lg">了解，關閉視窗</button>
+                                    <button onClick={()=>setIsVacationModalOpen(false)} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-lg active:scale-[0.98] transition-all">了解，關閉視窗</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {/* 訂單 Modal */}
-                    {isOrderModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
-                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                                    <h3 className="font-black text-xl text-slate-800">{editingOrder ? '編輯派車任務' : '新建派車任務'}</h3>
-                                    <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2"><X size={18}/></button>
+                    {isOrderModalOpen && (() => {
+                        const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
+                        const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
+
+                        return (
+                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
+                            <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
+                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sm:rounded-t-2xl rounded-t-3xl z-10 shrink-0">
+                                    <h3 className="font-black text-xl text-slate-800 tracking-tight">{editingOrder ? '編輯派車任務' : '新建派車任務'}</h3>
+                                    <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2 text-slate-600 transition-colors"><X size={18}/></button>
                                 </div>
-                                <form onSubmit={handleSaveOrder} className="p-6 overflow-y-auto space-y-5">
+                                <form onSubmit={handleSaveOrder} className="p-6 overflow-y-auto space-y-5 bg-slate-50/50">
                                     
                                     {isOriginalMaintenance && !orderFormData.vehicleId && (
                                         <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-200 text-sm flex items-start gap-2 shadow-sm animate-pulse">
@@ -871,121 +1081,173 @@
                                         </div>
                                     )}
 
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">客戶名稱 *</label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">客戶名稱 <span className="text-rose-500">*</span></label>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車時間 *</label>
-                                            <input type="datetime-local" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono" value={orderFormData.start} onChange={e=>setOrderFormData({...orderFormData, start:e.target.value})} required/>
+                                            <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide block mb-1.5">取車時間 <span className="text-rose-500">*</span></label>
+                                            <input type="datetime-local" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" value={orderFormData.start} onChange={e=>setOrderFormData({...orderFormData, start:e.target.value})} required/>
                                         </div>
                                         <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車時間 *</label>
-                                            <input type="datetime-local" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono" value={orderFormData.end} onChange={e=>setOrderFormData({...orderFormData, end:e.target.value})} required/>
+                                            <label className="text-xs font-bold text-rose-700 uppercase tracking-wide block mb-1.5">還車時間 <span className="text-rose-500">*</span></label>
+                                            <input type="datetime-local" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-rose-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" value={orderFormData.end} onChange={e=>setOrderFormData({...orderFormData, end:e.target.value})} required/>
                                         </div>
                                     </div>
 
                                     <datalist id="locations">{PRESET_LOCATIONS.map(l => <option key={l} value={l} />)}</datalist>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
                                         </div>
                                     </div>
                                     
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">備註事項 (選填)</label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})} />
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">訂單狀態</label>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
+                                            <option value="confirmed">🟢 正常 (依時間自動判斷狀態)</option>
+                                            <option value="cancelled">🔴 已取消 (退單/未出席)</option>
+                                        </select>
                                     </div>
 
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-2 flex justify-between items-center">
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">備註事項 <span className="text-slate-400 font-normal">(選填)</span></label>
+                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-3 flex justify-between items-center">
                                             <span>指派車輛</span>
-                                            <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded normal-case tracking-normal">可稍後再指派</span>
+                                            <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded font-bold">可稍後再指派</span>
                                         </label>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                            <label className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${!orderFormData.vehicleId ? 'border-amber-400 bg-amber-50/50' : 'border-slate-100 hover:border-slate-300 bg-white'}`}>
-                                                <input type="radio" name="vid" className="hidden" checked={!orderFormData.vehicleId} onChange={() => setOrderFormData({...orderFormData, vehicleId: ''})}/>
-                                                <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${!orderFormData.vehicleId ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`}>
-                                                    {!orderFormData.vehicleId && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                        <div className="space-y-2 max-h-56 overflow-y-auto pr-2 pb-1">
+                                            {/* 未分配選項 */}
+                                            <label className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${!orderFormData.vehicleId ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400 shadow-md' : 'border-slate-100 hover:border-slate-300 bg-white'}`}>
+                                                <div className="flex items-center gap-3.5">
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${!orderFormData.vehicleId ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`}>
+                                                        {!orderFormData.vehicleId && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                                    </div>
+                                                    <div className={`font-bold text-sm tracking-tight ${!orderFormData.vehicleId ? 'text-amber-800' : 'text-slate-600'}`}>
+                                                        ⚠️ 尚未指派任何車輛
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 font-bold text-amber-700">尚未分配車輛</div>
+                                                <input type="radio" name="vid" className="hidden" checked={!orderFormData.vehicleId} onChange={()=> setOrderFormData({...orderFormData, vehicleId: ''})}/>
                                             </label>
+
                                             {vehicles.map(v => {
                                                 const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
                                                 const selected = orderFormData.vehicleId === v.id;
                                                 return (
-                                                    <label key={v.id} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${selected ? 'border-blue-500 bg-blue-50/50' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}>
+                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
+                                                        <div className="flex items-center gap-3.5">
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300'}`}>
+                                                                {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-brand-900' : 'text-slate-700'}`}>{v.plate}</div>
+                                                                <div className="text-[11px] text-slate-500 flex flex-wrap gap-1.5 items-center mt-0.5 font-medium">
+                                                                    <span>{v.model}</span>
+                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-brand-600">{v.feature}</span></>}
+                                                                    {v.seats && <><span className="text-slate-300">|</span><span>{v.seats}座</span></>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {!available && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-md font-bold whitespace-nowrap shadow-sm border border-rose-200">{(v.status === 'maintenance' && new Date(orderFormData.end) > getJSTNominalDate()) ? '維修中' : '時間衝突'}</span>}
                                                         <input type="radio" name="vid" className="hidden" checked={selected} onChange={() => available && setOrderFormData({...orderFormData, vehicleId: v.id})} disabled={!available}/>
-                                                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
-                                                            {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <div className={`font-bold ${selected ? 'text-blue-900' : 'text-slate-700'}`}>{v.plate}</div>
-                                                            <div className="text-[10px] text-slate-500">{v.model} {v.seats}座</div>
-                                                        </div>
-                                                        {!available && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold">{(v.status === 'maintenance' && new Date(orderFormData.end) > getJSTNominalDate()) ? '維修中' : '時間衝突'}</span>}
                                                     </label>
                                                 )
                                             })}
                                         </div>
                                     </div>
                                     
-                                    <div className="flex gap-3 pt-4 border-t border-slate-100">
-                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors">取消</button>
-                                        <button type="submit" className="flex-1 py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20">確認派車</button>
+                                    <div className="flex gap-3 pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
+                                        {/* 編輯模式下的快速刪除按鈕 */}
+                                        {editingOrder && (
+                                            <button type="button" onClick={() => { setIsOrderModalOpen(false); setTimeout(()=>handleDeleteOrder(editingOrder.id), 100); }} className="py-3.5 px-4 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors shadow-sm flex justify-center items-center">
+                                                <Trash2 size={20}/>
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={()=>setIsOrderModalOpen(false)} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-sm">取消</button>
+                                        <button type="submit" className="flex-[2] py-3.5 bg-brand-600 text-white rounded-xl font-bold text-base tracking-wide hover:bg-brand-700 transition-all active:scale-[0.98] shadow-md shadow-brand-200">儲存訂單</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
-                    )}
+                    )})}
 
                     {/* 車輛 Modal */}
                     {isVehicleModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
-                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                                    <h3 className="font-black text-xl text-slate-800">{editingVehicle ? '編輯車輛檔案' : '登錄新車輛'}</h3>
-                                    <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2"><X size={18}/></button>
+                        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
+                            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
+                                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sm:rounded-t-2xl rounded-t-3xl z-10 shrink-0">
+                                    <h3 className="font-black text-xl text-slate-800 tracking-tight">{editingVehicle ? '編輯車輛檔案' : '登錄新車輛'}</h3>
+                                    <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="bg-slate-100 hover:bg-slate-200 rounded-full p-2 text-slate-600 transition-colors"><X size={18}/></button>
                                 </div>
-                                <form onSubmit={async (e) => {
-                                    e.preventDefault();
-                                    const data = { ...vehicleFormData, updatedAt: serverTimestamp() };
-                                    if (editingVehicle) await updateDoc(doc(db, 'vehicles', editingVehicle.id), data);
-                                    else await addDoc(collection(db, 'vehicles'), { ...data, createdAt: serverTimestamp() });
-                                    setIsVehicleModalOpen(false);
-                                }} className="p-6 overflow-y-auto space-y-4">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 *</label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                <form onSubmit={handleSaveVehicle} className="p-6 overflow-y-auto space-y-5 bg-slate-50/50">
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 <span className="text-rose-500">*</span></label>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 text-base tracking-wide transition-all focus:bg-white" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車型 *</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/></div>
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">特徵</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={vehicleFormData.feature} onChange={e=>setVehicleFormData({...vehicleFormData, feature:e.target.value})} /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">座位</label><input type="number" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} /></div>
+
+                                    <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">營運狀態</label>
-                                            <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={vehicleFormData.status} onChange={e=>setVehicleFormData({...vehicleFormData, status:e.target.value})}>
-                                                <option value="active">✅ 正常服役</option>
-                                                <option value="maintenance">🔧 維修保養</option>
-                                            </select>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車型 <span className="text-rose-500">*</span></label>
+                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: Alphard" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">特徵</label>
+                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: HEV 4WD" value={vehicleFormData.feature} onChange={e=>setVehicleFormData({...vehicleFormData, feature:e.target.value})} />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-[1fr_2fr] gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">座位</label>
+                                            <div className="relative">
+                                                <input type="number" className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none pr-8 transition-all focus:bg-white font-bold text-slate-700 text-center" placeholder="7" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} />
+                                                <span className="absolute right-3 top-2.5 text-slate-400 text-sm font-bold">座</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">輪胎配置</label>
+                                            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                                <label className={`flex-1 text-center py-2 rounded-md text-sm font-bold cursor-pointer transition-all ${vehicleFormData.tire === '冬済' ? 'bg-white shadow-sm text-brand-600 ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}>
+                                                    <input type="radio" name="tire" value="冬済" className="hidden" checked={vehicleFormData.tire === '冬済'} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}/>
+                                                    ❄️ 冬胎
+                                                </label>
+                                                <label className={`flex-1 text-center py-2 rounded-md text-sm font-bold cursor-pointer transition-all ${vehicleFormData.tire === '夏済' ? 'bg-white shadow-sm text-amber-600 ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}>
+                                                    <input type="radio" name="tire" value="夏済" className="hidden" checked={vehicleFormData.tire === '夏済'} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}/>
+                                                    ☀️ 夏胎
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    {/* 🔥 優化：ETC 智能選單與新增卡號 */}
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                                        <label className="text-xs font-bold text-slate-700 uppercase block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-indigo-500"/> ETC 綁定設定</label>
-                                        
-                                        <select className="w-full bg-white border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm text-slate-700 mb-3 shadow-sm" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
-                                            <option value="">-- 不綁定 ETC 卡片 --</option>
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-700 block mb-3 uppercase tracking-wider">車輛營運狀態</label>
+                                        <div className="flex gap-3">
+                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${vehicleFormData.status !== 'maintenance' ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-bold' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-500 font-medium'}`}>
+                                                <input type="radio" name="status" value="active" checked={vehicleFormData.status !== 'maintenance'} onChange={e => setVehicleFormData({...vehicleFormData, status: 'active'})} className="hidden"/>
+                                                <CheckCircle size={18}/> 正常營運
+                                            </label>
+                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${vehicleFormData.status === 'maintenance' ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-sm font-bold' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-500 font-medium'}`}>
+                                                <input type="radio" name="status" value="maintenance" checked={vehicleFormData.status === 'maintenance'} onChange={e => setVehicleFormData({...vehicleFormData, status: 'maintenance'})} className="hidden"/>
+                                                <AlertTriangle size={18}/> 維修保養
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-brand-500"/> ETC 綁定設定</label>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
+                                            <option value="">-- 不綁定 ETC --</option>
                                             {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
                                                 const owner = vehicles.find(v => v.etc === etc);
                                                 const isUsed = owner && owner.id !== editingVehicle?.id;
@@ -993,14 +1255,16 @@
                                             })}
                                         </select>
 
-                                        <div className="flex gap-2 items-center pt-3 border-t border-slate-200/60">
-                                            <input placeholder="拿到新卡？在此輸入新卡號" className="flex-1 bg-white border border-slate-200 p-2.5 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
-                                            <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm">登錄</button>
+                                        <div className="flex gap-2 items-center pt-3 border-t border-slate-100">
+                                            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap bg-slate-100 px-2 py-1 rounded">新增</span>
+                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
+                                            <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap">加入選單</button>
                                         </div>
                                     </div>
-
-                                    <div className="flex gap-3 pt-4 border-t border-slate-100">
-                                        <button type="submit" className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-lg">儲存檔案</button>
+                                    
+                                    <div className="flex gap-3 pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
+                                        <button type="button" onClick={()=>setIsVehicleModalOpen(false)} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-sm">取消</button>
+                                        <button type="submit" className="flex-1 py-3.5 bg-brand-600 text-white rounded-xl font-bold text-base tracking-wide hover:bg-brand-700 transition-all active:scale-[0.98] shadow-md shadow-brand-200">儲存檔案</button>
                                     </div>
                                 </form>
                             </div>
