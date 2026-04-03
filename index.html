@@ -310,7 +310,7 @@
                 orders.forEach(o => {
                     if (o.status === 'cancelled') return;
                     const startDate = new Date(o.start), endDate = new Date(o.end);
-                    const vehicle = vehicles.find(v => v.id === o.vehicleId); // 可能為 undefined 如果未分配
+                    const vehicle = vehicles.find(v => v.id === o.vehicleId); 
 
                     if (startDate >= startWindow && startDate <= endWindow && startDate > targetJstDate) 
                         events.push({ id: `start-${o.id}`, type: 'pickup', time: startDate, order: o, vehicle });
@@ -330,7 +330,7 @@
                 return { activeOrders: active, historyOrders: history };
             }, [orders, realTime]); 
 
-            // --- 輔助運算 ---
+            // --- 判斷原車是否維修中 ---
             const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
             const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
 
@@ -416,6 +416,7 @@
                     onConfirm: async () => {
                         try {
                             await deleteDoc(doc(db, 'orders', id));
+                            setIsOrderModalOpen(false); // 如果是在編輯模式中刪除，連帶關閉 Modal
                         } catch (error) {
                             setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
                         }
@@ -448,22 +449,6 @@
                 });
             };
 
-            const handleDeleteItem = (collectionName, id) => {
-                setDialog({
-                    isOpen: true,
-                    type: 'confirm',
-                    message: "資料刪除後無法復原，確定刪除?",
-                    onConfirm: async () => {
-                        try {
-                            await deleteDoc(doc(db, collectionName, id));
-                        } catch (error) {
-                            setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
-                        }
-                    }
-                });
-            };
-
-
             if (isLoading) return (
                 <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 space-y-4">
                     <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
@@ -473,7 +458,7 @@
 
             return (
                 <div className="pb-28 md:pb-12 text-slate-800">
-                    {/* 共用彈出視窗 */}
+                    {/* 共用 Dialog */}
                     {dialog.isOpen && (
                         <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-all duration-300">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl transform animate-scale-in border border-slate-100">
@@ -543,6 +528,7 @@
                             </div>
                         )}
 
+                        {/* DASHBOARD TAB */}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6 animate-fade-in-up">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -839,6 +825,7 @@
                             </div>
                         )}
 
+                        {/* VEHICLES TAB */}
                         {activeTab === 'vehicles' && (
                             <div className="space-y-4">
                                 <button onClick={()=>{setEditingVehicle(null); setVehicleFormData({location: '成田', plate: '', brand: 'Toyota', model: 'Alphard', feature: '', seats: 7, etc: '', tire: '冬済', status: 'active'}); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg shadow-slate-900/20 font-bold flex justify-center items-center gap-2 active:scale-[0.98] transition-all text-lg"><Plus strokeWidth={2.5}/> 新增車隊車輛</button>
@@ -855,7 +842,7 @@
                                                 </div>
                                                 <div className="flex gap-1">
                                                     <button onClick={()=>{setEditingVehicle(v); setVehicleFormData(v); setNewEtcNumber(''); setIsVehicleModalOpen(true)}} className="p-2.5 text-brand-600 hover:bg-brand-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Edit3 size={16}/></button>
-                                                    <button onClick={()=>handleDeleteItem('vehicles', v.id)} className="p-2.5 text-rose-600 hover:bg-rose-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Trash2 size={16}/></button>
+                                                    <button onClick={()=>handleDeleteVehicle(v.id)} className="p-2.5 text-rose-600 hover:bg-rose-50 bg-slate-50 rounded-xl border border-slate-100 shadow-sm transition-colors"><Trash2 size={16}/></button>
                                                 </div>
                                             </div>
                                             <div className="flex gap-2 text-[11px] font-bold flex-wrap items-center">
@@ -874,6 +861,7 @@
                             </div>
                         )}
 
+                        {/* ORDERS TAB */}
                         {activeTab === 'orders' && (
                             <div className="space-y-4">
                                 <div className="flex gap-2">
@@ -939,6 +927,7 @@
                             </div>
                         )}
 
+                        {/* HISTORY TAB */}
                         {activeTab === 'history' && (
                             <div className="space-y-4">
                                 <div className="relative">
@@ -963,7 +952,7 @@
                         )}
                     </main>
 
-                    {/* 底部導覽列 */}
+                    {/* 底部導覽列 (手機) */}
                     <div className="fixed bottom-0 left-0 right-0 glass-nav flex justify-around p-2 pb-safe z-30 sm:hidden">
                         {[ { id: 'dashboard', icon: Activity, label: '看板' }, { id: 'vehicles', icon: Car, label: '車隊' }, { id: 'orders', icon: Calendar, label: '任務' }, { id: 'history', icon: History, label: '紀錄' } ].map(tab => (
                             <button key={tab.id} onClick={()=>setActiveTab(tab.id)} className={`flex flex-col items-center justify-center w-16 h-12 rounded-xl transition-all duration-200 ${activeTab === tab.id ? 'text-blue-600 font-bold scale-110' : 'text-slate-400 font-medium hover:bg-slate-100/50'}`}>
@@ -983,7 +972,7 @@
                         ))}
                     </div>
 
-                    {/* 🔥 新增：人員排休分析 Modal */}
+                    {/* 🔥 彈出視窗：人員排休分析 Modal */}
                     {isVacationModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
                             <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
@@ -1034,11 +1023,7 @@
                     )}
 
                     {/* 訂單 Modal */}
-                    {isOrderModalOpen && (() => {
-                        const originalVehicle = editingOrder ? vehicles.find(v => v.id === editingOrder.vehicleId) : null;
-                        const isOriginalMaintenance = originalVehicle && originalVehicle.status === 'maintenance' && new Date(editingOrder?.end) > getJSTNominalDate();
-
-                        return (
+                    {isOrderModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-all duration-300">
                             <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
                                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sm:rounded-t-2xl rounded-t-3xl z-10 shrink-0">
@@ -1056,7 +1041,7 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">客戶名稱 <span className="text-rose-500">*</span></label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
                                     </div>
                                     
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1074,17 +1059,17 @@
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
                                         </div>
                                     </div>
                                     
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">訂單狀態</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
                                             <option value="confirmed">🟢 正常 (依時間自動判斷狀態)</option>
                                             <option value="cancelled">🔴 已取消 (退單/未出席)</option>
                                         </select>
@@ -1092,7 +1077,7 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">備註事項 <span className="text-slate-400 font-normal">(選填)</span></label>
-                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
+                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1118,16 +1103,16 @@
                                                 const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
                                                 const selected = orderFormData.vehicleId === v.id;
                                                 return (
-                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
+                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
                                                         <div className="flex items-center gap-3.5">
                                                             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
                                                                 {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                                                             </div>
                                                             <div className="flex-1">
-                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-brand-900' : 'text-slate-700'}`}>{v.plate}</div>
+                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-blue-900' : 'text-slate-700'}`}>{v.plate}</div>
                                                                 <div className="text-[11px] text-slate-500 flex flex-wrap gap-1.5 items-center mt-0.5 font-medium">
                                                                     <span>{v.model}</span>
-                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-brand-600">{v.feature}</span></>}
+                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-blue-600">{v.feature}</span></>}
                                                                     {v.seats && <><span className="text-slate-300">|</span><span>{v.seats}座</span></>}
                                                                 </div>
                                                             </div>
@@ -1153,7 +1138,7 @@
                                 </form>
                             </div>
                         </div>
-                    )})}
+                    )}
 
                     {/* 車輛 Modal */}
                     {isVehicleModalOpen && (
@@ -1166,17 +1151,17 @@
                                 <form onSubmit={handleSaveVehicle} className="p-6 overflow-y-auto space-y-5 bg-slate-50/50">
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 <span className="text-rose-500">*</span></label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 text-base tracking-wide transition-all focus:bg-white" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 text-base tracking-wide transition-all focus:bg-white" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車型 <span className="text-rose-500">*</span></label>
-                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: Alphard" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
+                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: Alphard" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">特徵</label>
-                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: HEV 4WD" value={vehicleFormData.feature} onChange={e=>setVehicleFormData({...vehicleFormData, feature:e.target.value})} />
+                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: HEV 4WD" value={vehicleFormData.feature} onChange={e=>setVehicleFormData({...vehicleFormData, feature:e.target.value})} />
                                         </div>
                                     </div>
 
@@ -1184,14 +1169,14 @@
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">座位</label>
                                             <div className="relative">
-                                                <input type="number" className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none pr-8 transition-all focus:bg-white font-bold text-slate-700 text-center" placeholder="7" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} />
+                                                <input type="number" className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-8 transition-all focus:bg-white font-bold text-slate-700 text-center" placeholder="7" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} />
                                                 <span className="absolute right-3 top-2.5 text-slate-400 text-sm font-bold">座</span>
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">輪胎配置</label>
                                             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                                <label className={`flex-1 text-center py-2 rounded-md text-sm font-bold cursor-pointer transition-all ${vehicleFormData.tire === '冬済' ? 'bg-white shadow-sm text-brand-600 ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}>
+                                                <label className={`flex-1 text-center py-2 rounded-md text-sm font-bold cursor-pointer transition-all ${vehicleFormData.tire === '冬済' ? 'bg-white shadow-sm text-blue-600 ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}>
                                                     <input type="radio" name="tire" value="冬済" className="hidden" checked={vehicleFormData.tire === '冬済'} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}/>
                                                     ❄️ 冬胎
                                                 </label>
@@ -1218,8 +1203,8 @@
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-brand-500"/> ETC 綁定</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-blue-500"/> ETC 綁定</label>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
                                             <option value="">-- 不綁定 ETC --</option>
                                             {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
                                                 const owner = vehicles.find(v => v.etc === etc);
@@ -1229,7 +1214,7 @@
                                         </select>
 
                                         <div className="flex gap-2 items-center pt-3 border-t border-slate-100">
-                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
+                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
                                             <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap">新增登錄</button>
                                         </div>
                                     </div>
