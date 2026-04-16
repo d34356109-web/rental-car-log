@@ -210,6 +210,11 @@
                 const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
                 return isSameDay ? `本日 ${hm}` : `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${hm}`;
             };
+            const shortFormat = (iso) => {
+                if (!iso) return '';
+                const d = new Date(iso);
+                return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+            };
 
             const liveTimeDisplay = useMemo(() => {
                 return realTime.toLocaleString('zh-TW', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -220,13 +225,25 @@
                 return vehicles.filter(v => v.location === viewLocation);
             }, [vehicles, viewLocation]);
 
-            // 核心邏輯
-            const isVehicleAvailable = (vid, start, end, excludeId) => {
-                if (!start || !end || !vid) return true;
-                const s = new Date(start), e = new Date(end), now = getJSTNominalDate();
-                const v = vehicles.find(v => v.id === vid);
-                if (v?.status === 'maintenance' && e > now) return false;
-                return !orders.some(o => o.vehicleId === vid && o.id !== excludeId && o.status !== 'cancelled' && s < new Date(o.end) && e > new Date(o.start));
+            // 🔥 核心邏輯：動態防呆 (回傳衝突的那筆訂單，而非單純 true/false)
+            const getConflictingOrder = (vid, start, end, excludeId) => {
+                if (!start || !end || !vid) return null;
+                const s = new Date(start).getTime();
+                const e = new Date(end).getTime();
+                if (isNaN(s) || isNaN(e) || s >= e) return null; // 排除錯誤的時間輸入
+
+                return orders.find(o => {
+                    if (o.vehicleId !== vid) return false;
+                    if (o.id === excludeId) return false;
+                    if (o.status === 'cancelled') return false;
+                    
+                    const oStart = new Date(o.start).getTime();
+                    const oEnd = new Date(o.end).getTime();
+                    if (isNaN(oStart) || isNaN(oEnd)) return false;
+                    
+                    // 兩段時間重疊的數學公式：(起始A < 結束B) 且 (結束A > 起始B)
+                    return s < oEnd && e > oStart;
+                });
             };
 
             const isOrderActiveAtTime = (order, targetTimeStr) => {
@@ -391,14 +408,31 @@
 
             const handleSaveOrder = async (e) => {
                 e.preventDefault();
+                
+                // 基本驗證
                 if (!orderFormData.customer || !orderFormData.start || !orderFormData.end) {
                     return setDialog({ isOpen: true, message: "請填寫必填欄位 (客戶名稱、取/還車時間)", type: 'alert' });
                 }
-                if (new Date(orderFormData.start) >= new Date(orderFormData.end)) {
+                const sTime = new Date(orderFormData.start).getTime();
+                const eTime = new Date(orderFormData.end).getTime();
+                if (isNaN(sTime) || isNaN(eTime) || sTime >= eTime) {
                     return setDialog({ isOpen: true, message: "時間錯誤，還車時間必須晚於取車時間", type: 'alert' });
                 }
-                if (orderFormData.vehicleId && !isVehicleAvailable(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id)) {
-                    return setDialog({ isOpen: true, message: "所選車輛在該時段已被預約或處於維修狀態", type: 'alert' });
+                
+                // 防呆：儲存時再次檢查衝突與維修狀態
+                if (orderFormData.vehicleId) {
+                    const v = vehicles.find(x => x.id === orderFormData.vehicleId);
+                    if (v?.status === 'maintenance' && eTime > getJSTNominalDate().getTime()) {
+                        return setDialog({ isOpen: true, message: "所選車輛目前處於維修保養狀態，無法指派", type: 'alert' });
+                    }
+                    const conflict = getConflictingOrder(orderFormData.vehicleId, orderFormData.start, orderFormData.end, editingOrder?.id);
+                    if (conflict) {
+                        return setDialog({ 
+                            isOpen: true, 
+                            message: `所選車輛在該時段已被預約！\n衝突客戶：${conflict.customer}\n衝突時間：${formatDateTime(conflict.start)} ~ ${formatDateTime(conflict.end)}`, 
+                            type: 'alert' 
+                        });
+                    }
                 }
 
                 try {
@@ -458,21 +492,6 @@
                     onConfirm: async () => {
                         try {
                             await deleteDoc(doc(db, 'vehicles', id));
-                        } catch (error) {
-                            setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
-                        }
-                    }
-                });
-            };
-
-            const handleDeleteItem = (collectionName, id) => {
-                setDialog({
-                    isOpen: true,
-                    type: 'confirm',
-                    message: "資料刪除後無法復原，確定刪除?",
-                    onConfirm: async () => {
-                        try {
-                            await deleteDoc(doc(db, collectionName, id));
                         } catch (error) {
                             setTimeout(() => setDialog({ isOpen: true, message: '刪除失敗：' + error.message, type: 'alert' }), 300);
                         }
@@ -1128,7 +1147,7 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">客戶名稱 <span className="text-rose-500">*</span></label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 transition-all focus:bg-white text-base" placeholder="輸入客戶姓名或代號" value={orderFormData.customer} onChange={e=>setOrderFormData({...orderFormData, customer:e.target.value})} required/>
                                     </div>
                                     
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1146,17 +1165,17 @@
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">取車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.pickupLocation} onChange={e=>setOrderFormData({...orderFormData, pickupLocation:e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">還車地</label>
-                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
+                                            <input list="locations" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all focus:bg-white" placeholder="選擇或輸入" value={orderFormData.returnLocation} onChange={e=>setOrderFormData({...orderFormData, returnLocation:e.target.value})} />
                                         </div>
                                     </div>
                                     
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">訂單狀態</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 cursor-pointer transition-all focus:bg-white" value={orderFormData.status} onChange={e=>setOrderFormData({...orderFormData, status:e.target.value})}>
                                             <option value="confirmed">🟢 正常 (依時間自動判斷狀態)</option>
                                             <option value="cancelled">🔴 已取消 (退單/未出席)</option>
                                         </select>
@@ -1164,7 +1183,7 @@
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">備註事項 <span className="text-slate-400 font-normal">(選填)</span></label>
-                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
+                                        <textarea className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700 resize-none transition-all focus:bg-white" rows="2" placeholder="航班號碼、特殊需求等" value={orderFormData.note} onChange={e=>setOrderFormData({...orderFormData, note:e.target.value})}></textarea>
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1187,24 +1206,46 @@
                                             </label>
 
                                             {activeLocationVehicles.map(v => {
-                                                const available = isVehicleAvailable(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
+                                                // 動態判斷衝突與否，使用 getConflictingOrder 取代舊的布林值
+                                                const conflict = getConflictingOrder(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
+                                                const eTime = new Date(orderFormData.end).getTime();
+                                                const isMaint = v.status === 'maintenance' && (isNaN(eTime) || eTime > getJSTNominalDate().getTime());
+                                                const available = !conflict && !isMaint;
                                                 const selected = orderFormData.vehicleId === v.id;
+                                                
+                                                let conflictText = '';
+                                                if (isMaint) conflictText = '🔧 維修保養中';
+                                                else if (conflict) {
+                                                    const cStart = shortFormat(conflict.start);
+                                                    const cEnd = shortFormat(conflict.end);
+                                                    conflictText = `衝突: ${cStart} ~ ${cEnd}`;
+                                                }
+
                                                 return (
-                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-40 grayscale-[30%] cursor-not-allowed bg-slate-50' : ''}`}>
+                                                    <label key={v.id} className={`relative flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${selected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-sm' : 'border-slate-100 hover:border-slate-300 bg-white'} ${!available ? 'opacity-50 bg-slate-50 cursor-not-allowed' : ''}`}>
                                                         <div className="flex items-center gap-3.5">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300'}`}>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
                                                                 {selected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                                                             </div>
                                                             <div className="flex-1">
-                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-brand-900' : 'text-slate-700'}`}>{v.plate}</div>
+                                                                <div className={`font-bold text-sm tracking-tight ${selected ? 'text-blue-900' : 'text-slate-700'}`}>{v.plate}</div>
                                                                 <div className="text-[11px] text-slate-500 flex flex-wrap gap-1.5 items-center mt-0.5 font-medium">
                                                                     <span>{v.model}</span>
-                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-brand-600">{v.feature}</span></>}
+                                                                    {v.feature && <><span className="text-slate-300">|</span><span className="text-blue-600">{v.feature}</span></>}
                                                                     {v.seats && <><span className="text-slate-300">|</span><span>{v.seats}座</span></>}
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        {!available && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-md font-bold whitespace-nowrap shadow-sm border border-rose-200">{(v.status === 'maintenance' && new Date(orderFormData.end) > getJSTNominalDate()) ? '維修中' : '時間衝突'}</span>}
+
+                                                        {/* 顯示無法選擇的詳細原因 */}
+                                                        {!available && (
+                                                            <div className="flex flex-col items-end gap-1 ml-2">
+                                                                <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-md font-bold whitespace-nowrap shadow-sm border border-rose-200">
+                                                                    {conflictText}
+                                                                </span>
+                                                                {conflict && <span className="text-[10px] text-rose-600 font-bold px-1 truncate max-w-[120px]">{conflict.customer}</span>}
+                                                            </div>
+                                                        )}
                                                         <input type="radio" name="vid" className="hidden" checked={selected} onChange={() => available && setOrderFormData({...orderFormData, vehicleId: v.id})} disabled={!available}/>
                                                     </label>
                                                 )
@@ -1215,7 +1256,7 @@
                                     <div className="flex gap-3 pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
                                         {/* 編輯模式下的快速刪除按鈕 */}
                                         {editingOrder && (
-                                            <button type="button" onClick={() => { setIsOrderModalOpen(false); setTimeout(() => handleDeleteOrder(editingOrder.id), 200); }} className="py-3.5 px-4 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors shadow-sm flex justify-center items-center">
+                                            <button type="button" onClick={() => handleDeleteOrder(editingOrder.id)} className="py-3.5 px-4 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors shadow-sm flex justify-center items-center">
                                                 <Trash2 size={20}/>
                                             </button>
                                         )}
@@ -1238,17 +1279,17 @@
                                 <form onSubmit={handleSaveVehicle} className="p-6 overflow-y-auto space-y-5 bg-slate-50/50">
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車牌號碼 <span className="text-rose-500">*</span></label>
-                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-bold text-slate-800 text-base tracking-wide transition-all focus:bg-white" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
+                                        <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 text-base tracking-wide transition-all focus:bg-white" placeholder="例: 品川300わ1234" value={vehicleFormData.plate} onChange={e=>setVehicleFormData({...vehicleFormData, plate:e.target.value})} required/>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">車型 <span className="text-rose-500">*</span></label>
-                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: Alphard" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
+                                            <input className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white font-bold text-slate-700" placeholder="例: Alphard" value={vehicleFormData.model} onChange={e=>setVehicleFormData({...vehicleFormData, model:e.target.value})} required/>
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">所屬營業所 <span className="text-rose-500">*</span></label>
-                                            <select className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white font-bold text-slate-700 cursor-pointer" value={vehicleFormData.location} onChange={e=>setVehicleFormData({...vehicleFormData, location:e.target.value})} required>
+                                            <select className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white font-bold text-slate-700 cursor-pointer" value={vehicleFormData.location} onChange={e=>setVehicleFormData({...vehicleFormData, location:e.target.value})} required>
                                                 {BRANCHES.map(branch => (
                                                     <option key={branch} value={branch}>{branch}</option>
                                                 ))}
@@ -1260,14 +1301,14 @@
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">座位</label>
                                             <div className="relative">
-                                                <input type="number" className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/50 outline-none pr-8 transition-all focus:bg-white font-bold text-slate-700 text-center" placeholder="7" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} />
+                                                <input type="number" className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-8 transition-all focus:bg-white font-bold text-slate-700 text-center" placeholder="7" value={vehicleFormData.seats} onChange={e=>setVehicleFormData({...vehicleFormData, seats:e.target.value})} />
                                                 <span className="absolute right-3 top-2.5 text-slate-400 text-sm font-bold">座</span>
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5">輪胎配置</label>
                                             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                                <label className={`flex-1 text-center py-2 rounded-md text-sm font-bold cursor-pointer transition-all ${vehicleFormData.tire === '冬済' ? 'bg-white shadow-sm text-brand-600 ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}>
+                                                <label className={`flex-1 text-center py-2 rounded-md text-sm font-bold cursor-pointer transition-all ${vehicleFormData.tire === '冬済' ? 'bg-white shadow-sm text-blue-600 ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}>
                                                     <input type="radio" name="tire" value="冬済" className="hidden" checked={vehicleFormData.tire === '冬済'} onChange={e=>setVehicleFormData({...vehicleFormData, tire:e.target.value})}/>
                                                     ❄️ 冬胎
                                                 </label>
@@ -1294,8 +1335,8 @@
                                     </div>
 
                                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-brand-500"/> ETC 綁定</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-brand-500/50 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5"><CreditCard size={14} className="text-blue-500"/> ETC 綁定</label>
+                                        <select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm text-slate-700 mb-3 cursor-pointer transition-all focus:bg-white font-bold" value={vehicleFormData.etc} onChange={e=>setVehicleFormData({...vehicleFormData, etc:e.target.value})}>
                                             <option value="">-- 不綁定 ETC --</option>
                                             {Array.from(new Set(vehicles.map(v=>v.etc).filter(Boolean))).concat(newEtcNumber ? [newEtcNumber] : []).map(etc => {
                                                 const owner = vehicles.find(v => v.etc === etc);
@@ -1305,7 +1346,7 @@
                                         </select>
 
                                         <div className="flex gap-2 items-center pt-3 border-t border-slate-100">
-                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand-500/50 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
+                                            <input placeholder="輸入新 ETC 卡號" className="flex-1 bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all focus:bg-white" value={newEtcNumber} onChange={e=>setNewEtcNumber(e.target.value)}/>
                                             <button type="button" onClick={()=>{ if(newEtcNumber) { setVehicleFormData({...vehicleFormData, etc:newEtcNumber}); setNewEtcNumber(''); } }} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm active:scale-95 whitespace-nowrap">新增登錄</button>
                                         </div>
                                     </div>
