@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>車輛訂單管理系統 PRO (極致調度版)</title>
     
+    <!-- 引入 Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -37,19 +39,20 @@
         }
     </script>
     
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@18.2.0",
-          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-          "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-          "lucide-react": "https://esm.sh/lucide-react@0.292.0",
-          "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
-          "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
-          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
-        }
-      }
-    </script>
+   <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "react/jsx-dev-runtime": "https://esm.sh/react@18.2.0/jsx-dev-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.292.0",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+  }
+}
+</script>
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
@@ -1040,17 +1043,6 @@
                                             return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
                                         }
                                         return true;
-                                    }).length === 0 ? <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-dashed border-slate-200">無歷史紀錄</div> : historyOrders.filter(o => {
-                                        if (o.vehicleId) {
-                                            const v = vehicles.find(x => x.id === o.vehicleId);
-                                            if (!v || v.location !== viewLocation) return false;
-                                        }
-                                        if (historySearchTerm) {
-                                            const v = vehicles.find(x=>x.id===o.vehicleId);
-                                            const searchLower = historySearchTerm.toLowerCase();
-                                            return o.customer.toLowerCase().includes(searchLower) || (v && v.plate.toLowerCase().includes(searchLower));
-                                        }
-                                        return true;
                                     }).sort((a,b)=>new Date(b.end)-new Date(a.end)).map(o => (
                                         <div key={o.id} className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
                                             <div>
@@ -1059,7 +1051,7 @@
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${o.status === 'cancelled' ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{o.status === 'cancelled' ? '已取消' : '已完成'}</span>
-                                                <button onClick={()=>handleDeleteOrder(o.id)} className="text-slate-400 hover:text-rose-600"><Trash2 size={14}/></button>
+                                                <button onClick={()=>handleDeleteItem('orders', o.id)} className="text-slate-400 hover:text-rose-600"><Trash2 size={14}/></button>
                                             </div>
                                         </div>
                                     ))}
@@ -1088,7 +1080,7 @@
                         ))}
                     </div>
 
-                    {/* 彈出視窗：人員排休分析 Modal */}
+                    {/* 🔥 彈出視窗：人員排休分析 Modal */}
                     {isVacationModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm">
                             <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up">
@@ -1216,6 +1208,7 @@
                                             </label>
 
                                             {activeLocationVehicles.map(v => {
+                                                // 動態判斷衝突與否，使用 getConflictingOrder 取代舊的布林值
                                                 const conflict = getConflictingOrder(v.id, orderFormData.start, orderFormData.end, editingOrder?.id);
                                                 const eTime = new Date(orderFormData.end).getTime();
                                                 const isMaint = v.status === 'maintenance' && (isNaN(eTime) || eTime > getJSTNominalDate().getTime());
@@ -1246,6 +1239,7 @@
                                                             </div>
                                                         </div>
 
+                                                        {/* 顯示無法選擇的詳細原因 */}
                                                         {!available && (
                                                             <div className="flex flex-col items-end gap-1 ml-2">
                                                                 <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded-md font-bold whitespace-nowrap shadow-sm border border-rose-200">
@@ -1262,6 +1256,7 @@
                                     </div>
                                     
                                     <div className="flex gap-3 pt-4 mt-4 sticky bottom-0 bg-slate-50/90 backdrop-blur-md pb-2">
+                                        {/* 編輯模式下的快速刪除按鈕 */}
                                         {editingOrder && (
                                             <button type="button" onClick={() => handleDeleteOrder(editingOrder.id)} className="py-3.5 px-4 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors shadow-sm flex justify-center items-center">
                                                 <Trash2 size={20}/>
